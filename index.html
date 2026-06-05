@@ -1068,40 +1068,6 @@
         return list.some(item => item.class === className && item.name === studentName);
     }
 
-    // ---------- 每日次数限制 (每人每天最多5次) ----------
-    const MAX_DAILY_ATTEMPTS = 5;
-    function getDailyAttemptsKey(className, studentName) {
-        return `${className}|${studentName}`;
-    }
-    function getTodayDate() {
-        return new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
-    }
-    // 检查并记录当日尝试次数，返回 { allowed, remaining }
-    function checkAndRecordDailyAttempt(className, studentName) {
-        const key = getDailyAttemptsKey(className, studentName);
-        const today = getTodayDate();
-        const storage = localStorage.getItem('daily_attempts');
-        let attemptsData = storage ? JSON.parse(storage) : {};
-        if (!attemptsData[key]) {
-            attemptsData[key] = { date: today, count: 0 };
-        }
-        const record = attemptsData[key];
-        if (record.date !== today) {
-            // 新的一天，重置计数
-            record.date = today;
-            record.count = 0;
-        }
-        const remaining = MAX_DAILY_ATTEMPTS - record.count;
-        if (remaining <= 0) {
-            return { allowed: false, remaining: 0 };
-        }
-        // 允许，增加计数
-        record.count++;
-        attemptsData[key] = record;
-        localStorage.setItem('daily_attempts', JSON.stringify(attemptsData));
-        return { allowed: true, remaining: remaining - 1 };
-    }
-
     async function startContestModeWithWhitelist() {
         if (isContestMode && !confirm('当前有未完成的闯关，确定要重新开始吗？')) return;
 
@@ -1143,15 +1109,6 @@
                     errorDiv.style.display = 'block';
                     errorDiv.style.color = '#d32f2f';
                     errorDiv.innerText = '❌ 您不在本次闯关的白名单中，无法进入答题模式。';
-                    confirmBtn.disabled = false;
-                    return;
-                }
-                // 检查每日答题次数
-                const daily = checkAndRecordDailyAttempt(cls, name);
-                if (!daily.allowed) {
-                    errorDiv.style.display = 'block';
-                    errorDiv.style.color = '#d32f2f';
-                    errorDiv.innerText = `❌ 今日答题次数已达上限（${MAX_DAILY_ATTEMPTS}次），请明天再来。`;
                     confirmBtn.disabled = false;
                     return;
                 }
