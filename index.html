@@ -391,6 +391,12 @@
             text-align: center;
             margin-bottom: 12px;
         }
+        .leaderboard-rank .table-wrapper {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e2ecd9;
+            border-radius: 8px;
+        }
         .leaderboard-rank table {
             width: 100%;
             border-collapse: collapse;
@@ -402,6 +408,9 @@
         }
         .leaderboard-rank th {
             background: #eef3e8;
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }
         .modal {
             position: fixed;
@@ -481,11 +490,13 @@
     <div id="challengeResultMsg" class="challenge-result"></div>
     <div id="wrongQuestionsContainer" class="wrong-questions" style="display: none;"></div>
     <div id="leaderboardRank" class="leaderboard-rank">
-        <h3>🏆 成绩排行榜 (前十名·每人最佳)</h3>
-        <table id="rankTable">
-            <thead><tr><th>排名</th><th>班级</th><th>姓名</th><th>得分</th><th>用时(秒)</th></tr></thead>
-            <tbody id="rankBody"></tbody>
-        </table>
+        <h3>🏆 今日满分榜 (当天14题全对)</h3>
+        <div class="table-wrapper">
+            <table id="rankTable">
+                <thead><tr><th>排名</th><th>班级</th><th>姓名</th><th>得分</th><th>用时(秒)</th></tr></thead>
+                <tbody id="rankBody"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -758,8 +769,9 @@
         const tensA = Math.floor(a / 10), onesA = a % 10;
         const tensB = Math.floor(b / 10), onesB = b % 10;
         const tensRes = Math.floor(res / 10), onesRes = res % 10;
+        // 修改：十位为0时使用占位符 □
         const formatDigit = (val, isTens) => {
-            if (isTens && val === 0) return '&nbsp;';
+            if (isTens && val === 0) return '□';
             return val;
         };
         return `
@@ -777,7 +789,7 @@
                 <div class="vertical-line"></div>
                 <div style="display: flex; align-items: baseline; gap: 4px;">
                     <span style="display:inline-block; width:28px;"></span>
-                    <span class="vb-digit-fixed">${tensRes === 0 ? '&nbsp;' : tensRes}</span>
+                    <span class="vb-digit-fixed">${formatDigit(tensRes, true)}</span>
                     <span class="vb-digit-fixed">${onesRes}</span>
                 </div>
             </div>
@@ -1068,6 +1080,38 @@
         return list.some(item => item.class === className && item.name === studentName);
     }
 
+    // ---------- 每日次数限制 (每人每天最多5次) ----------
+    const MAX_DAILY_ATTEMPTS = 5;
+    function getDailyAttemptsKey(className, studentName) {
+        return `${className}|${studentName}`;
+    }
+    function getTodayDate() {
+        return new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
+    }
+    // 检查并记录当日尝试次数，返回 { allowed, remaining }
+    function checkAndRecordDailyAttempt(className, studentName) {
+        const key = getDailyAttemptsKey(className, studentName);
+        const today = getTodayDate();
+        const storage = localStorage.getItem('daily_attempts');
+        let attemptsData = storage ? JSON.parse(storage) : {};
+        if (!attemptsData[key]) {
+            attemptsData[key] = { date: today, count: 0 };
+        }
+        const record = attemptsData[key];
+        if (record.date !== today) {
+            record.date = today;
+            record.count = 0;
+        }
+        const remaining = MAX_DAILY_ATTEMPTS - record.count;
+        if (remaining <= 0) {
+            return { allowed: false, remaining: 0 };
+        }
+        record.count++;
+        attemptsData[key] = record;
+        localStorage.setItem('daily_attempts', JSON.stringify(attemptsData));
+        return { allowed: true, remaining: remaining - 1 };
+    }
+
     async function startContestModeWithWhitelist() {
         if (isContestMode && !confirm('当前有未完成的闯关，确定要重新开始吗？')) return;
 
@@ -1109,6 +1153,15 @@
                     errorDiv.style.display = 'block';
                     errorDiv.style.color = '#d32f2f';
                     errorDiv.innerText = '❌ 您不在本次闯关的白名单中，无法进入答题模式。';
+                    confirmBtn.disabled = false;
+                    return;
+                }
+                // 检查每日答题次数
+                const daily = checkAndRecordDailyAttempt(cls, name);
+                if (!daily.allowed) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.style.color = '#d32f2f';
+                    errorDiv.innerText = `❌ 今日答题次数已达上限（${MAX_DAILY_ATTEMPTS}次），请明天再来。`;
                     confirmBtn.disabled = false;
                     return;
                 }
@@ -1175,35 +1228,54 @@
     function startTimer() { if (timer) clearInterval(timer); seconds = 0; document.getElementById('timerDisplay').innerText = '0'; timer = setInterval(() => { if (isContestMode) { seconds++; document.getElementById('timerDisplay').innerText = seconds; } }, 1000); }
     function stopTimer() { if (timer) clearInterval(timer); timer = null; }
 
+    // ======================= 排行榜加载（今日满分榜，新接口） =======================
     async function loadLeaderboard() { 
         try { 
-            const response = await fetch('https://quickform.cn/api/1243skvzxa/all'); 
+            const response = await fetch('https://wzkjgz.site/api/86zpbmecar/all'); 
             const data = await response.json(); 
             const submissions = data.submissions || []; 
-            const bestMap = new Map(); 
-            for (const sub of submissions) { 
-                const key = `${sub.class}|${sub.name}`; 
-                const score = Number(sub.score) || 0; 
-                const time = Number(sub.time) || 0; 
-                if (!bestMap.has(key) || score > bestMap.get(key).score || (score === bestMap.get(key).score && time < bestMap.get(key).time)) { 
-                    bestMap.set(key, { class: sub.class, name: sub.name, score, time }); 
-                } 
-            } 
-            const bestList = Array.from(bestMap.values()); 
-            bestList.sort((a,b) => { if (a.score !== b.score) return b.score - a.score; return a.time - b.time; }); 
-            const top10 = bestList.slice(0,10); 
+            // 获取今天的日期字符串 (YYYY-MM-DD)
+            const today = new Date().toLocaleDateString('sv-SE');
+            
+            // 过滤：当天提交 且 分数等于 totalQ (14)
+            const filtered = submissions.filter(sub => {
+                // 新接口使用 submitted_at 字段
+                const created = sub.submitted_at;
+                if (!created) return false;
+                // 从 "2026-06-26 15:16:58" 中提取日期部分
+                const subDate = created.split(' ')[0];
+                if (subDate !== today) return false;
+                // 检查分数
+                const score = Number(sub.score);
+                return score === totalQ; // totalQ = 14
+            });
+
+            // 按得分降序、用时升序排序
+            filtered.sort((a, b) => {
+                if (a.score !== b.score) return b.score - a.score;
+                return (a.time || 0) - (b.time || 0);
+            });
+
             const body = document.getElementById('rankBody'); 
             if (!body) return; 
             body.innerHTML = ''; 
-            top10.forEach((item, idx) => { 
+            if (filtered.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">今日暂无满分记录</td></tr>';
+                return;
+            }
+            filtered.forEach((item, idx) => { 
                 const row = body.insertRow(); 
-                row.insertCell(0).innerText = idx+1; 
+                row.insertCell(0).innerText = idx + 1; 
                 row.insertCell(1).innerText = item.class || '—'; 
                 row.insertCell(2).innerText = item.name || '—'; 
                 row.insertCell(3).innerText = `${item.score}/${totalQ}`; 
                 row.insertCell(4).innerText = item.time || '—'; 
             }); 
-        } catch(e) { console.error('加载排行榜失败', e); } 
+        } catch(e) { 
+            console.error('加载排行榜失败', e); 
+            const body = document.getElementById('rankBody');
+            if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">加载失败，请稍后重试</td></tr>';
+        } 
     }
 
     function triggerConfetti() { 
@@ -1225,6 +1297,7 @@
         container.innerHTML = html; 
     }
 
+    // ======================= 提交答案 =======================
     function submitAnswer() {
         if (nextQuestionTimer) return;
         const q = challengeQuestions[currentIndex];
@@ -1259,11 +1332,20 @@
             if (isContestMode) {
                 stopTimer();
                 const finalScore = correctCount;
-                fetch('https://quickform.cn/api/1243skvzxa', {
+                // 新接口提交
+                fetch('https://wzkjgz.site/api/86zpbmecar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ class: currentStudent.class, name: currentStudent.name, score: finalScore, time: seconds })
-                }).then(() => { showFinalResult(finalScore, seconds); loadLeaderboard(); }).catch(err => showFinalResult(finalScore, seconds));
+                    body: JSON.stringify({
+                        class: currentStudent.class,
+                        name: currentStudent.name,
+                        score: finalScore,
+                        time: seconds
+                    })
+                }).then(() => { 
+                    showFinalResult(finalScore, seconds); 
+                    loadLeaderboard(); 
+                }).catch(err => showFinalResult(finalScore, seconds));
             } else {
                 const finalScore = correctCount;
                 showFinalResult(finalScore, 0);
@@ -1302,9 +1384,10 @@
             let rankMsg = '';
             await new Promise(resolve => setTimeout(resolve, 1200));
             try {
-                const response = await fetch('https://quickform.cn/api/1243skvzxa/all');
+                const response = await fetch('https://wzkjgz.site/api/86zpbmecar/all');
                 const data = await response.json();
                 const submissions = data.submissions || [];
+                // 计算排名（仅看当前用户最佳成绩）
                 const bestMap = new Map();
                 for (const sub of submissions) {
                     const key = `${sub.class}|${sub.name}`;
