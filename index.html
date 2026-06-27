@@ -444,12 +444,12 @@
 </head>
 <body>
 <div class="mode-tabs">
-    <button id="classModeBtn" class="mode-tab active">课堂练习</button>
-    <button id="challengeModeBtn" class="mode-tab">课后闯关</button>
+    <button id="classModeBtn" class="mode-tab">课堂练习</button>
+    <button id="challengeModeBtn" class="mode-tab active">课后闯关</button>
 </div>
 
 <!-- 课堂练习模块 -->
-<div id="classroomPanel" class="notebook">
+<div id="classroomPanel" class="notebook" style="display:none;">
     <div class="top-bar">
         <div class="date-section">
             <span id="currentDateDisplay" class="date-display">加载中...</span>
@@ -468,7 +468,7 @@
 </div>
 
 <!-- 闯关逐题模式 -->
-<div id="challengePanel" class="challenge-container">
+<div id="challengePanel" class="challenge-container active">
     <div class="challenge-header">
         <div class="timer-area"><span>⏱️</span> <span id="timerDisplay">练习中</span></div>
         <button id="resetChallengeBtn" class="reset-challenge-btn">🔄</button>
@@ -769,7 +769,6 @@
         const tensA = Math.floor(a / 10), onesA = a % 10;
         const tensB = Math.floor(b / 10), onesB = b % 10;
         const tensRes = Math.floor(res / 10), onesRes = res % 10;
-        // 修改：十位为0时使用占位符 □
         const formatDigit = (val, isTens) => {
             if (isTens && val === 0) return '□';
             return val;
@@ -1562,9 +1561,12 @@
         else if (!isContestMode) resetChallenge(); 
     });
     setupNumpad();
+    // 初始显示课后闯关，因此无需再调用 initFreePractice 并隐藏课堂练习，
+    // 但 initFreePractice 会重置挑战状态并加载排行榜，所以仍需调用。
     initFreePractice();
-    classPanel.style.display = 'block';
-    challengePanel.classList.remove('active');
+    // 确保课堂练习隐藏，课后闯关显示
+    classPanel.style.display = 'none';
+    challengePanel.classList.add('active');
 </script>
 </body>
 </html>
