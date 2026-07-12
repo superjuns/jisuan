@@ -490,7 +490,7 @@
     <div id="challengeResultMsg" class="challenge-result"></div>
     <div id="wrongQuestionsContainer" class="wrong-questions" style="display: none;"></div>
     <div id="leaderboardRank" class="leaderboard-rank">
-        <h3>🏆 今日满分榜 (当天14题全对)</h3>
+        <h3>🏆 今日排行榜</h3>
         <div class="table-wrapper">
             <table id="rankTable">
                 <thead><tr><th>排名</th><th>班级</th><th>姓名</th><th>得分</th><th>用时(秒)</th></tr></thead>
@@ -1227,39 +1227,60 @@
     function startTimer() { if (timer) clearInterval(timer); seconds = 0; document.getElementById('timerDisplay').innerText = '0'; timer = setInterval(() => { if (isContestMode) { seconds++; document.getElementById('timerDisplay').innerText = seconds; } }, 1000); }
     function stopTimer() { if (timer) clearInterval(timer); timer = null; }
 
-    // ======================= 排行榜加载（今日满分榜，新接口） =======================
+    // ======================= 排行榜加载（今日最佳成绩榜） =======================
+    function getBeijingTodayStr() {
+        var d = new Date();
+        d.setTime(d.getTime() + 8 * 3600 * 1000);
+        return d.toISOString().slice(0, 10);
+    }
+
     async function loadLeaderboard() { 
         try { 
             const response = await fetch('https://wzkjgz.site/api/86zpbmecar/all'); 
             const data = await response.json(); 
             const submissions = data.submissions || []; 
-            // 获取今天的日期字符串 (YYYY-MM-DD)
-            const today = new Date().toLocaleDateString('sv-SE');
+            // 获取北京时间今天的日期字符串 (YYYY-MM-DD)
+            const today = getBeijingTodayStr();
             
-            // 过滤：当天提交 且 分数等于 totalQ (14)
-            const filtered = submissions.filter(sub => {
-                // 新接口使用 submitted_at 字段
+            // 过滤：当天提交
+            const todayItems = submissions.filter(sub => {
                 const created = sub.submitted_at;
                 if (!created) return false;
-                // 从 "2026-06-26 15:16:58" 中提取日期部分
-                const subDate = created.split(' ')[0];
-                if (subDate !== today) return false;
-                // 检查分数
-                const score = Number(sub.score);
-                return score === totalQ; // totalQ = 14
+                const subDate = String(created).slice(0, 10);
+                return subDate === today;
             });
 
-            // 按得分降序、用时升序排序
+            // 按 (班级+姓名) 分组，每人保留最佳成绩（分数高优先，同分用时短优先）
+            const bestMap = {};
+            todayItems.forEach(item => {
+                const cls = item.class || item['班级'] || '';
+                const name = item.name || item['姓名'] || '';
+                if (!name) return;
+                const key = cls + '|' + name;
+                const score = Number(item.score) || 0;
+                const time = Number(item.time) || 0;
+                if (!bestMap[key]) {
+                    bestMap[key] = { class: cls, name: name, score: score, time: time };
+                } else {
+                    const prev = bestMap[key];
+                    if (score > prev.score || (score === prev.score && time < prev.time)) {
+                        bestMap[key] = { class: cls, name: name, score: score, time: time };
+                    }
+                }
+            });
+
+            // 转数组并排序
+            const filtered = Object.values(bestMap);
             filtered.sort((a, b) => {
                 if (a.score !== b.score) return b.score - a.score;
-                return (a.time || 0) - (b.time || 0);
+                return a.time - b.time;
             });
 
             const body = document.getElementById('rankBody'); 
             if (!body) return; 
             body.innerHTML = ''; 
             if (filtered.length === 0) {
-                body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">今日暂无满分记录</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">今日暂无数据</td></tr>';
                 return;
             }
             filtered.forEach((item, idx) => { 
@@ -1267,7 +1288,7 @@
                 row.insertCell(0).innerText = idx + 1; 
                 row.insertCell(1).innerText = item.class || '—'; 
                 row.insertCell(2).innerText = item.name || '—'; 
-                row.insertCell(3).innerText = `${item.score}/${totalQ}`; 
+                row.insertCell(3).innerText = item.score + '/' + totalQ; 
                 row.insertCell(4).innerText = item.time || '—'; 
             }); 
         } catch(e) { 
