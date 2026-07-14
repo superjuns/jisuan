@@ -1041,6 +1041,29 @@
     let whiteListCache = null;
     let whitelistLoadPromise = null;
 
+    // URL参数自动登录工具函数
+    function getUrlParam(name) {
+        return new URLSearchParams(window.location.search).get(name) || '';
+    }
+    function normStr(s) {
+        return String(s || '').replace(/班/g, '').replace(/\s/g, '').toLowerCase();
+    }
+    // URL参数自动登录（平台跳转时免输入）
+    async function tryAutoLoginFromUrl() {
+        const cls = getUrlParam('class') || getUrlParam('cls') || getUrlParam('班级');
+        const name = getUrlParam('name') || getUrlParam('姓名');
+        if (!cls || !name) return false;
+        const normCls = /^\d+$/.test(cls) ? cls + '班' : cls;
+        try {
+            const allowed = await isInWhitelist(normCls, name);
+            if (!allowed) return false;
+            localStorage.setItem('jisuan_class', normCls);
+            localStorage.setItem('jisuan_name', name);
+            currentStudent = { class: normCls, name: name };
+            return true;
+        } catch (e) { return false; }
+    }
+
     async function fetchWhitelist() {
         if (whiteListCache) return whiteListCache;
         if (whitelistLoadPromise) return await whitelistLoadPromise;
@@ -1112,6 +1135,26 @@
     }
 
     async function startContestModeWithWhitelist() {
+        // 如果已有登录信息，直接开始
+        const savedCls = localStorage.getItem('jisuan_class');
+        const savedName = localStorage.getItem('jisuan_name');
+        if (savedCls && savedName) {
+            isInWhitelist(savedCls, savedName).then(allowed => {
+                if (allowed) {
+                    const daily = checkAndRecordDailyAttempt(savedCls, savedName);
+                    if (daily.allowed) {
+                        if (timer) clearInterval(timer);
+                        isContestMode = true;
+                        currentStudent = { class: savedCls, name: savedName };
+                        resetChallenge();
+                        startTimer();
+                        loadLeaderboard();
+                    }
+                }
+            }).catch(() => {});
+            return;
+        }
+
         if (isContestMode && !confirm('当前有未完成的闯关，确定要重新开始吗？')) return;
 
         const modal = document.createElement('div');
@@ -1169,6 +1212,8 @@
                 if (timer) clearInterval(timer);
                 isContestMode = true;
                 currentStudent = { class: cls, name: name };
+                    localStorage.setItem('jisuan_class', cls);
+                    localStorage.setItem('jisuan_name', name);
                 resetChallenge();
                 startTimer();
                 loadLeaderboard();
@@ -1588,6 +1633,9 @@
     // 确保课堂练习隐藏，课后闯关显示
     classPanel.style.display = 'none';
     challengePanel.classList.add('active');
+
+    // URL参数自动登录（平台跳转时免输入）
+    tryAutoLoginFromUrl();
 </script>
 </body>
 </html>
