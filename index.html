@@ -1402,7 +1402,7 @@
         q.answered = true;
         q.correct = isCorrect;
         if (isCorrect) correctCount++;
-        else wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer });
+        else wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
 
         const feedbackDiv = document.getElementById('currentFeedback');
         if (!isContestMode) {
@@ -1426,7 +1426,13 @@
                         class: currentStudent.class,
                         name: currentStudent.name,
                         score: finalScore,
-                        time: seconds
+                        time: seconds,
+                        wrong_questions: wrongQuestions.map(w => ({
+                            question_text: w.text,
+                            correct_answer: w.answer,
+                            user_answer: w.userAnswer,
+                            question_type: w.questionType
+                        }))
                     })
                 }).then(() => { 
                     showFinalResult(finalScore, seconds); 
