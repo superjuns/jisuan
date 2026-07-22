@@ -1450,7 +1450,8 @@ window.fetch = function(url, options) {
                             correct_answer: w.answer,
                             user_answer: w.userAnswer,
                             question_type: w.questionType
-                        }))
+                        })),
+                        submitted_at: new Date().toISOString()
                     })
                 }).then(() => { 
                     showFinalResult(finalScore, seconds); 
