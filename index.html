@@ -460,7 +460,7 @@ window.fetch = function(url, options) {
         .modal-btn.cancel { background: #aaa; }
     </style>
     <style id="yiqi-apple-layout">
-        :root { --ink:#17181b; --muted:#7d8491; --paper:#faf8f3; --surface:#ffffff; --soft:#f2f2f7; --blue:#0a84ff; --orange:#ff9f0a; --red:#ff453a; }
+        :root { --ink:#1d1d1f; --muted:#86868b; --paper:#f5f5f7; --surface:#ffffff; --soft:#f2f2f7; --blue:#007aff; --orange:#ff9f0a; --red:#ff3b30; --purple:#af52de; }
         html { background:var(--paper); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; }
         body { min-height:100svh; background:var(--paper); color:var(--ink); padding:16px 14px calc(28px + env(safe-area-inset-bottom)); }
         button { font:inherit; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
@@ -470,8 +470,9 @@ window.fetch = function(url, options) {
         .mode-tab.active { background:white; color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.09); }
         .notebook,.challenge-container { max-width:760px; padding:18px; border-radius:26px; background:var(--surface); box-shadow:0 10px 32px rgba(52,45,38,.06); }
         .top-bar { padding:7px 10px; border-radius:16px; background:var(--soft); }
-        .date-section { padding:2px 8px; box-shadow:none; }
+        .date-section { padding:2px 8px; background:white; box-shadow:none; }
         .date-nav-btn,.action-btn { min-width:40px; min-height:40px; border-radius:12px; }
+        .date-nav-btn { background:#e9e9eb; color:var(--ink); }
         .action-btn { background:var(--blue); padding:7px 14px; }
         .export-btn { background:var(--orange); }
         .section-title { margin-top:14px; padding:4px 10px; border:0; border-radius:9px; background:#fff4da; color:#73520b; }
@@ -488,15 +489,25 @@ window.fetch = function(url, options) {
         .current-card { min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); }
         .current-question { margin:18px 0; font-family:ui-monospace,"SFMono-Regular","PingFang SC",monospace; font-size:clamp(1.35rem,5vw,2rem); line-height:1.45; }
         .current-input { width:116px; min-height:52px; border:1px solid #d7d7dc; border-radius:15px; background:var(--soft); }
+        .current-input:focus,.vb-input:focus,.vb-input-wide:focus { outline:0; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,122,255,.14); }
         .feedback { min-height:28px; margin-top:9px; }
         .numpad { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; padding:0; border-radius:0; background:transparent; }
         .numpad button { width:100%; min-width:0; min-height:56px; padding:8px; border-radius:16px; background:var(--soft); box-shadow:none; font-size:1.15rem; color:var(--ink); }
         .numpad .del-btn { background:#fff0ee; color:var(--red); }
         .numpad .submit-key { background:var(--blue); color:white; }
-        .wrong-questions,.challenge-result { border-radius:18px; }
+        .vertical-blanks { background:var(--soft); }
+        .vertical-line { border-color:var(--ink); }
+        .vb-input,.vb-input-wide { border-color:#d2d2d7; background:white; }
+        .challenge-result { border-radius:18px; background:#fff6e5; color:#6f4c00; }
+        .wrong-questions { border-radius:18px; background:#fff1ef; }
+        .wrong-questions li { border-color:#ffd0ca; }
         .leaderboard-rank { border:0; padding-top:8px; }
         .leaderboard-rank .table-wrapper { border-color:#e5e5ea; border-radius:16px; }
         .leaderboard-rank th { background:var(--soft); }
+        .export-modal,.modal { background:rgba(0,0,0,.28); backdrop-filter:blur(3px); }
+        .export-modal-content,.modal-content { border-radius:24px; box-shadow:0 28px 80px rgba(0,0,0,.22); }
+        .export-btn-option,.modal-btn { min-height:46px; border-radius:14px; background:var(--blue); }
+        .export-btn-option.cancel,.modal-btn.cancel { background:#e9e9eb; color:var(--ink); }
         .yiqi-cheer { position:fixed; left:50%; top:15%; z-index:3000; transform:translate(-50%,-8px) scale(.96); opacity:0; padding:12px 17px; border-radius:18px; background:rgba(255,255,255,.94); box-shadow:0 16px 45px rgba(0,0,0,.14); backdrop-filter:blur(18px); font-weight:750; pointer-events:none; transition:transform 260ms cubic-bezier(.23,1,.32,1),opacity 180ms ease-out; }
         .yiqi-cheer.show { transform:translate(-50%,0) scale(1); opacity:1; }
         @media (max-width:620px) {
@@ -1487,14 +1498,14 @@ window.fetch = function(url, options) {
         yiqiPlayTone(false);
         yiqiShowCheer('答对啦！继续加油 ✨');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        canvasConfetti({ particleCount: 36, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#0a84ff', '#ff9f0a', '#34c759', '#ffd166'] });
+        canvasConfetti({ particleCount: 36, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
     }
 
     function triggerConfetti() { 
         yiqiPlayTone(true);
         yiqiShowCheer('完成啦！数学小能手 ✨');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        canvasConfetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2e7d32', '#ffa726', '#d32f2f'] }); 
+        canvasConfetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
         setTimeout(() => { 
             canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.2 }, startVelocity: 15 }); 
             canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.8 }, startVelocity: 15 }); 
@@ -1540,7 +1551,7 @@ window.fetch = function(url, options) {
         if (!isContestMode) {
             if (feedbackDiv) {
                 feedbackDiv.innerHTML = isCorrect ? '✅ 回答正确！' : `❌ 回答错误，正确答案是 ${q.answer}`;
-                feedbackDiv.style.color = isCorrect ? '#2e7d32' : '#d32f2f';
+                feedbackDiv.style.color = isCorrect ? '#007aff' : '#ff3b30';
             }
         } else {
             if (feedbackDiv) feedbackDiv.innerHTML = '';
