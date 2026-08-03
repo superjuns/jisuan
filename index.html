@@ -459,6 +459,67 @@ window.fetch = function(url, options) {
         .modal-btn { background: #2e7d32; color: white; border: none; padding: 8px; border-radius: 40px; width: 100%; margin-top: 10px; cursor: pointer; }
         .modal-btn.cancel { background: #aaa; }
     </style>
+    <style id="yiqi-apple-layout">
+        :root { --ink:#17181b; --muted:#7d8491; --paper:#faf8f3; --surface:#ffffff; --soft:#f2f2f7; --blue:#0a84ff; --orange:#ff9f0a; --red:#ff453a; }
+        html { background:var(--paper); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; }
+        body { min-height:100svh; background:var(--paper); color:var(--ink); padding:16px 14px calc(28px + env(safe-area-inset-bottom)); }
+        button { font:inherit; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+        button:active { transform:scale(.96); transition:transform 100ms ease-out; }
+        .mode-tabs { max-width:760px; margin:0 auto 14px; gap:4px; padding:4px; border-radius:14px; background:#e5e5ea; }
+        .mode-tab { flex:1; min-height:42px; padding:8px 14px; border-radius:11px; background:transparent; color:var(--muted); box-shadow:none; }
+        .mode-tab.active { background:white; color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.09); }
+        .notebook,.challenge-container { max-width:760px; padding:18px; border-radius:26px; background:var(--surface); box-shadow:0 10px 32px rgba(52,45,38,.06); }
+        .top-bar { padding:7px 10px; border-radius:16px; background:var(--soft); }
+        .date-section { padding:2px 8px; box-shadow:none; }
+        .date-nav-btn,.action-btn { min-width:40px; min-height:40px; border-radius:12px; }
+        .action-btn { background:var(--blue); padding:7px 14px; }
+        .export-btn { background:var(--orange); }
+        .section-title { margin-top:14px; padding:4px 10px; border:0; border-radius:9px; background:#fff4da; color:#73520b; }
+        .question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .question-item,.vertical-item { min-width:0; border:1px solid #e5e5ea; border-radius:16px; background:#fff; }
+        .question-item { min-height:48px; align-items:center; }
+        .vertical-item { min-height:190px; }
+        .q-text { overflow-wrap:anywhere; }
+        .challenge-header { margin-bottom:12px; padding:10px 12px; border-radius:16px; background:var(--ink); }
+        .timer-area { min-height:36px; padding:5px 10px; border-radius:11px; background:rgba(255,255,255,.12); color:white; }
+        .challenge-actions { display:flex; gap:8px; }
+        .sound-toggle,.reset-challenge-btn { width:40px; height:40px; padding:0; justify-content:center; border:0; border-radius:12px; background:rgba(255,255,255,.12); color:white; box-shadow:none; }
+        .start-game-btn { width:100%; min-height:48px; margin:0 0 12px; border-radius:15px; background:var(--blue); box-shadow:0 7px 18px rgba(10,132,255,.18); }
+        .current-card { min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); }
+        .current-question { margin:18px 0; font-family:ui-monospace,"SFMono-Regular","PingFang SC",monospace; font-size:clamp(1.35rem,5vw,2rem); line-height:1.45; }
+        .current-input { width:116px; min-height:52px; border:1px solid #d7d7dc; border-radius:15px; background:var(--soft); }
+        .feedback { min-height:28px; margin-top:9px; }
+        .numpad { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; padding:0; border-radius:0; background:transparent; }
+        .numpad button { width:100%; min-width:0; min-height:56px; padding:8px; border-radius:16px; background:var(--soft); box-shadow:none; font-size:1.15rem; color:var(--ink); }
+        .numpad .del-btn { background:#fff0ee; color:var(--red); }
+        .numpad .submit-key { background:var(--blue); color:white; }
+        .wrong-questions,.challenge-result { border-radius:18px; }
+        .leaderboard-rank { border:0; padding-top:8px; }
+        .leaderboard-rank .table-wrapper { border-color:#e5e5ea; border-radius:16px; }
+        .leaderboard-rank th { background:var(--soft); }
+        .yiqi-cheer { position:fixed; left:50%; top:15%; z-index:3000; transform:translate(-50%,-8px) scale(.96); opacity:0; padding:12px 17px; border-radius:18px; background:rgba(255,255,255,.94); box-shadow:0 16px 45px rgba(0,0,0,.14); backdrop-filter:blur(18px); font-weight:750; pointer-events:none; transition:transform 260ms cubic-bezier(.23,1,.32,1),opacity 180ms ease-out; }
+        .yiqi-cheer.show { transform:translate(-50%,0) scale(1); opacity:1; }
+        @media (max-width:620px) {
+            body { padding:10px 10px calc(20px + env(safe-area-inset-bottom)); }
+            .notebook,.challenge-container { padding:12px; border-radius:22px; }
+            .question-grid { grid-template-columns:1fr; gap:8px; }
+            .vertical-item { min-height:170px; }
+            .top-bar { align-items:stretch; }
+            .date-section { flex:1; justify-content:space-between; }
+            .current-card { min-height:175px; }
+            .numpad { gap:8px; }
+            .numpad button { min-height:54px; border-radius:15px; }
+            .leaderboard-rank th,.leaderboard-rank td { padding:7px 4px; font-size:.78rem; }
+        }
+        @media (max-width:370px) {
+            .mode-tab { padding-inline:7px; font-size:.9rem; }
+            .notebook,.challenge-container { padding:10px; }
+            .numpad { gap:7px; }
+            .numpad button { min-height:50px; }
+        }
+        @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition:none!important; scroll-behavior:auto!important; } }
+        @media (prefers-reduced-transparency:reduce) { .yiqi-cheer { background:white; backdrop-filter:none; } }
+    </style>
 </head>
 <body>
 <div class="mode-tabs">
@@ -489,7 +550,10 @@ window.fetch = function(url, options) {
 <div id="challengePanel" class="challenge-container active">
     <div class="challenge-header">
         <div class="timer-area"><span>⏱️</span> <span id="timerDisplay">练习中</span></div>
-        <button id="resetChallengeBtn" class="reset-challenge-btn">🔄</button>
+        <div class="challenge-actions">
+            <button id="soundToggleBtn" class="sound-toggle" type="button" aria-label="关闭声音">♪</button>
+            <button id="resetChallengeBtn" class="reset-challenge-btn" aria-label="重新开始">↻</button>
+        </div>
     </div>
     <button id="startGameBtn" class="start-game-btn">🎮 答题模式</button>
     <div class="current-card">
@@ -498,12 +562,9 @@ window.fetch = function(url, options) {
         <div id="currentFeedback" class="feedback"></div>
     </div>
     <div class="numpad" id="numpad">
-        <button data-digit="1">1</button><button data-digit="2">2</button><button data-digit="3">3</button>
-        <button data-digit="4">4</button><button data-digit="5">5</button><button data-digit="6">6</button>
-        <button data-digit="7">7</button><button data-digit="8">8</button><button data-digit="9">9</button>
-        <button data-digit="0">0</button>
-        <button class="del-btn" data-action="del">⌫</button>
-        <button class="submit-key" data-action="submit">✔ 提交</button>
+        <button data-digit="1">1</button><button data-digit="2">2</button><button data-digit="3">3</button><button class="del-btn" data-action="del" aria-label="删除">⌫</button>
+        <button data-digit="4">4</button><button data-digit="5">5</button><button data-digit="6">6</button><button data-digit="0">0</button>
+        <button data-digit="7">7</button><button data-digit="8">8</button><button data-digit="9">9</button><button class="submit-key" data-action="submit">提交</button>
     </div>
     <div id="challengeResultMsg" class="challenge-result"></div>
     <div id="wrongQuestionsContainer" class="wrong-questions" style="display: none;"></div>
@@ -1382,7 +1443,57 @@ window.fetch = function(url, options) {
         } 
     }
 
+    let yiqiSoundOn = localStorage.getItem('yiqi_game_sound') !== 'off';
+    function yiqiPlayTone(final = false) {
+        if (!yiqiSoundOn) return;
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioCtx();
+            const now = ctx.currentTime;
+            const notes = final ? [523.25, 659.25, 783.99, 1046.5] : [659.25, 783.99];
+            notes.forEach((frequency, index) => {
+                const oscillator = ctx.createOscillator();
+                const gain = ctx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.value = frequency;
+                oscillator.connect(gain);
+                gain.connect(ctx.destination);
+                const start = now + index * 0.07;
+                gain.gain.setValueAtTime(0.0001, start);
+                gain.gain.exponentialRampToValueAtTime(0.045, start + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+                oscillator.start(start);
+                oscillator.stop(start + 0.18);
+            });
+            setTimeout(() => ctx.close(), 700);
+        } catch (error) {}
+    }
+
+    function yiqiShowCheer(message) {
+        let cheer = document.getElementById('yiqiCheer');
+        if (!cheer) {
+            cheer = document.createElement('div');
+            cheer.id = 'yiqiCheer';
+            cheer.className = 'yiqi-cheer';
+            document.body.appendChild(cheer);
+        }
+        cheer.textContent = message;
+        cheer.classList.add('show');
+        clearTimeout(cheer.hideTimer);
+        cheer.hideTimer = setTimeout(() => cheer.classList.remove('show'), 1400);
+    }
+
+    function triggerAnswerCelebration() {
+        yiqiPlayTone(false);
+        yiqiShowCheer('答对啦！继续加油 ✨');
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        canvasConfetti({ particleCount: 36, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#0a84ff', '#ff9f0a', '#34c759', '#ffd166'] });
+    }
+
     function triggerConfetti() { 
+        yiqiPlayTone(true);
+        yiqiShowCheer('完成啦！数学小能手 ✨');
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         canvasConfetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2e7d32', '#ffa726', '#d32f2f'] }); 
         setTimeout(() => { 
             canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.2 }, startVelocity: 15 }); 
@@ -1419,7 +1530,10 @@ window.fetch = function(url, options) {
         const isCorrect = (parseInt(userVal) === q.answer);
         q.answered = true;
         q.correct = isCorrect;
-        if (isCorrect) correctCount++;
+        if (isCorrect) {
+            correctCount++;
+            triggerAnswerCelebration();
+        }
         else wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
 
         const feedbackDiv = document.getElementById('currentFeedback');
@@ -1672,6 +1786,18 @@ window.fetch = function(url, options) {
         if (isContestMode && confirm('重新开始将清空当前进度，确定吗？')) resetChallenge(); 
         else if (!isContestMode) resetChallenge(); 
     });
+    const soundToggleBtn = document.getElementById('soundToggleBtn');
+    function syncSoundToggle() {
+        soundToggleBtn.textContent = yiqiSoundOn ? '♪' : '♪̸';
+        soundToggleBtn.setAttribute('aria-label', yiqiSoundOn ? '关闭声音' : '开启声音');
+    }
+    soundToggleBtn.addEventListener('click', () => {
+        yiqiSoundOn = !yiqiSoundOn;
+        localStorage.setItem('yiqi_game_sound', yiqiSoundOn ? 'on' : 'off');
+        syncSoundToggle();
+        if (yiqiSoundOn) yiqiPlayTone(false);
+    });
+    syncSoundToggle();
     setupNumpad();
     // 初始显示课后闯关，因此无需再调用 initFreePractice 并隐藏课堂练习，
     // 但 initFreePractice 会重置挑战状态并加载排行榜，所以仍需调用。
