@@ -474,7 +474,7 @@ window.fetch = function(url, options) {
         .date-nav-btn,.action-btn { min-width:40px; min-height:40px; border-radius:12px; }
         .date-nav-btn { background:#e9e9eb; color:var(--ink); }
         .action-btn { background:var(--blue); padding:7px 14px; }
-        .export-btn { min-width:58px; background:#e9e9eb; color:#1d1d1f; box-shadow:none; }
+        .export-btn { min-width:40px; background:#fff; color:#1d1d1f; border:1px solid #e5e5ea; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .section-title { margin-top:14px; padding:5px 11px; border:0; border-radius:10px; background:#f2f2f7; color:#1d1d1f; font-weight:700; }
         .question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
         .question-item,.vertical-item { min-width:0; border:1px solid #e5e5ea; border-radius:16px; background:#fff; }
@@ -556,7 +556,7 @@ window.fetch = function(url, options) {
         </div>
         <div style="display: flex; gap: 6px;">
             <button id="toggleAnswerBtn" class="action-btn">答案</button>
-            <button id="exportBtn" class="action-btn export-btn">导出</button>
+            <button id="exportBtn" class="action-btn export-btn" aria-label="导出练习">📸</button>
         </div>
     </div>
     <div class="section-title">一、口算</div>
