@@ -514,8 +514,11 @@ window.fetch = function(url, options) {
         @media (max-width:620px) {
             body { padding:10px 10px calc(20px + env(safe-area-inset-bottom)); }
             .notebook,.challenge-container { padding:12px; border-radius:22px; }
-            .question-grid { grid-template-columns:1fr; gap:8px; }
-            .vertical-item { min-height:170px; }
+            .question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+            .question-item { min-height:46px; padding:8px 7px; gap:5px; }
+            .question-item .q-num { font-size:.85rem; }
+            .question-item .q-text { font-size:.82rem; white-space:nowrap; }
+            .vertical-item { min-height:170px; padding:12px 8px; }
             .top-bar { align-items:stretch; }
             .date-section { flex:1; justify-content:space-between; }
             .current-card { min-height:175px; }
@@ -526,6 +529,10 @@ window.fetch = function(url, options) {
         @media (max-width:370px) {
             .mode-tab { padding-inline:7px; font-size:.9rem; }
             .notebook,.challenge-container { padding:10px; }
+            .question-grid { gap:6px; }
+            .question-item { padding-inline:5px; gap:3px; }
+            .question-item .q-num { font-size:.75rem; }
+            .question-item .q-text { font-size:.72rem; }
             .numpad { gap:7px; }
             .numpad button { min-height:50px; }
         }
