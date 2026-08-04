@@ -465,6 +465,11 @@ window.fetch = function(url, options) {
         body { min-height:100svh; background:var(--paper); color:var(--ink); padding:16px 14px calc(28px + env(safe-area-inset-bottom)); }
         button { font:inherit; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
         button:active { transform:scale(.96); transition:transform 100ms ease-out; }
+        .daily-brand { max-width:760px; margin:0 auto 12px; display:flex; align-items:center; gap:10px; padding:2px 3px; }
+        .daily-brand-mark { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:#fff3df; color:#c66d00; font-size:1.2rem; font-weight:800; transform:rotate(-3deg); }
+        .daily-brand-copy { min-width:0; display:flex; flex-direction:column; }
+        .daily-brand-title { color:var(--ink); font-size:1.08rem; line-height:1.25; font-weight:800; letter-spacing:-.02em; }
+        .daily-brand-subtitle { color:var(--muted); font-size:.75rem; line-height:1.35; }
         .mode-tabs { max-width:760px; margin:0 auto 14px; gap:4px; padding:4px; border-radius:14px; background:#e5e5ea; }
         .mode-tab { flex:1; min-height:42px; padding:8px 14px; border-radius:11px; background:transparent; color:var(--muted); box-shadow:none; }
         .mode-tab.active { background:white; color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.09); }
@@ -476,6 +481,7 @@ window.fetch = function(url, options) {
         .action-btn { background:var(--blue); padding:7px 14px; }
         .export-btn { min-width:40px; background:#fff; color:#1d1d1f; border:1px solid #e5e5ea; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .section-title { margin-top:14px; padding:5px 11px; border:0; border-radius:10px; background:#f2f2f7; color:#1d1d1f; font-weight:700; }
+        .section-title::before { content:"✎"; margin-right:6px; color:#c66d00; }
         .question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
         .question-item,.vertical-item { min-width:0; border:1px solid #e5e5ea; border-radius:16px; background:#fff; }
         .question-item { min-height:48px; align-items:center; }
@@ -486,7 +492,9 @@ window.fetch = function(url, options) {
         .challenge-actions { display:flex; gap:8px; }
         .sound-toggle,.reset-challenge-btn { width:40px; height:40px; padding:0; justify-content:center; border:0; border-radius:12px; background:white; color:#1d1d1f; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .start-game-btn { width:100%; min-height:48px; margin:0 0 12px; border-radius:15px; background:var(--blue); box-shadow:0 7px 18px rgba(10,132,255,.18); }
-        .current-card { min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); }
+        .current-card { --daily-progress:7.14%; position:relative; min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); overflow:hidden; }
+        .daily-progress { width:min(280px,72%); height:5px; margin:9px auto 0; overflow:hidden; border-radius:999px; background:#e9e9eb; }
+        .daily-progress span { display:block; width:var(--daily-progress); height:100%; border-radius:inherit; background:var(--orange); transition:width 260ms cubic-bezier(.23,1,.32,1); }
         .current-question { margin:18px 0; font-family:ui-monospace,"SFMono-Regular","PingFang SC",monospace; font-size:clamp(1.35rem,5vw,2rem); line-height:1.45; }
         .current-input { width:116px; min-height:52px; border:1px solid #d7d7dc; border-radius:15px; background:var(--soft); }
         .current-input:focus,.vb-input:focus,.vb-input-wide:focus { outline:0; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,122,255,.14); }
@@ -511,6 +519,7 @@ window.fetch = function(url, options) {
         .export-btn-option.cancel,.modal-btn.cancel { background:#e9e9eb; color:var(--ink); }
         .yiqi-cheer { position:fixed; left:50%; top:15%; z-index:3000; transform:translate(-50%,-8px) scale(.96); opacity:0; padding:12px 17px; border-radius:18px; background:rgba(255,255,255,.94); box-shadow:0 16px 45px rgba(0,0,0,.14); backdrop-filter:blur(18px); font-weight:750; pointer-events:none; transition:transform 260ms cubic-bezier(.23,1,.32,1),opacity 180ms ease-out; }
         .yiqi-cheer.show { transform:translate(-50%,0) scale(1); opacity:1; }
+        .completion-stamp { display:inline-flex; align-items:center; gap:6px; margin-bottom:10px; padding:7px 12px; border:2px solid var(--orange); border-radius:12px; color:#a85b00; font-size:.82rem; font-weight:800; letter-spacing:.04em; transform:rotate(-2deg); }
         @media (max-width:620px) {
             body { padding:10px 10px calc(20px + env(safe-area-inset-bottom)); }
             .notebook,.challenge-container { padding:12px; border-radius:22px; }
@@ -541,6 +550,13 @@ window.fetch = function(url, options) {
     </style>
 </head>
 <body>
+<div class="daily-brand">
+    <div class="daily-brand-mark" aria-hidden="true">✎</div>
+    <div class="daily-brand-copy">
+        <strong class="daily-brand-title">每日一练</strong>
+        <span class="daily-brand-subtitle">今天也进步一点</span>
+    </div>
+</div>
 <div class="mode-tabs">
     <button id="classModeBtn" class="mode-tab">课堂练习</button>
     <button id="challengeModeBtn" class="mode-tab active">课后闯关</button>
@@ -577,6 +593,7 @@ window.fetch = function(url, options) {
     <button id="startGameBtn" class="start-game-btn">🎮 答题模式</button>
     <div class="current-card">
         <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共14题</div>
+        <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback"></div>
     </div>
@@ -1615,15 +1632,17 @@ window.fetch = function(url, options) {
 
     async function showFinalResult(finalScore, timeSec) {
         const currentCard = document.querySelector('.current-card');
+        const dailyProgress = document.querySelector('.daily-progress');
         const questionNumDiv = document.getElementById('currentQuestionNum');
         const questionDisplayDiv = document.getElementById('currentQuestionDisplay');
         const feedbackDiv = document.getElementById('currentFeedback');
         if (questionNumDiv) questionNumDiv.style.display = 'none';
         if (questionDisplayDiv) questionDisplayDiv.style.display = 'none';
         if (feedbackDiv) feedbackDiv.style.display = 'none';
+        if (dailyProgress) dailyProgress.style.display = 'none';
         let resultHtml = '';
         if (!isContestMode) {
-            resultHtml = `<div style="font-size:1.2rem; font-weight:bold;">🎉 练习完成 🎉</div><div style="margin-top:10px;">答对 ${finalScore} 题</div>`;
+            resultHtml = `<div class="completion-stamp">✓ 今日练习完成</div><div style="font-size:1.2rem; font-weight:bold;">做得很好！</div><div style="margin-top:10px;">答对 ${finalScore} 题</div>`;
         } else {
             let rankMsg = '';
             await new Promise(resolve => setTimeout(resolve, 1200));
@@ -1650,7 +1669,7 @@ window.fetch = function(url, options) {
                 const rank = rankIndex !== -1 ? rankIndex + 1 : '—';
                 rankMsg = `本次排名：第 ${rank} 名 (共 ${bestList.length} 人)`;
             } catch(e) { rankMsg = '排名获取失败'; }
-            resultHtml = `<div style="font-size:1.2rem; font-weight:bold;">🎉 闯关结束 🎉</div><div>答对 ${finalScore} 题，用时 ${timeSec} 秒</div><div>${rankMsg}</div>`;
+            resultHtml = `<div class="completion-stamp">✓ 今日闯关完成</div><div style="font-size:1.2rem; font-weight:bold;">做得很好！</div><div>答对 ${finalScore} 题，用时 ${timeSec} 秒</div><div>${rankMsg}</div>`;
         }
         const resultDiv = document.createElement('div');
         resultDiv.id = 'finalResultDisplay';
@@ -1672,10 +1691,14 @@ window.fetch = function(url, options) {
         const questionNumDiv = document.getElementById('currentQuestionNum');
         const questionDisplayDiv = document.getElementById('currentQuestionDisplay');
         const feedbackDiv = document.getElementById('currentFeedback');
+        const dailyProgress = document.querySelector('.daily-progress');
         if (questionNumDiv) questionNumDiv.style.display = 'block';
         if (questionDisplayDiv) questionDisplayDiv.style.display = 'block';
         if (feedbackDiv) feedbackDiv.style.display = 'block';
+        if (dailyProgress) dailyProgress.style.display = 'block';
         if (feedbackDiv) feedbackDiv.innerHTML = '';
+        const currentCard = document.querySelector('.current-card');
+        if (currentCard) currentCard.style.setProperty('--daily-progress', `${((currentIndex + 1) / totalQ) * 100}%`);
         const q = challengeQuestions[currentIndex];
         document.getElementById('currentQuestionNum').innerText = `第${currentIndex+1}题 / 共${totalQ}题`;
         if (q.type === 'vertical') {
