@@ -549,7 +549,7 @@ window.fetch = function(url, options) {
         @media (prefers-reduced-transparency:reduce) { .yiqi-cheer { background:white; backdrop-filter:none; } }
     </style>
 </head>
-<body>
+<body data-yiqi-game="daily-practice" style="--yiqi-accent:#ff9f0a;--yiqi-accent-soft:#fff3df">
 <div class="daily-brand">
     <div class="daily-brand-mark" aria-hidden="true">✎</div>
     <div class="daily-brand-copy">
@@ -572,7 +572,7 @@ window.fetch = function(url, options) {
         </div>
         <div style="display: flex; gap: 6px;">
             <button id="toggleAnswerBtn" class="action-btn">答案</button>
-            <button id="exportBtn" class="action-btn export-btn" aria-label="导出练习">📸</button>
+            <button id="exportBtn" class="action-btn export-btn" data-yiqi-action="icon" aria-label="导出练习">📸</button>
         </div>
     </div>
     <div class="section-title">一、口算</div>
@@ -586,11 +586,11 @@ window.fetch = function(url, options) {
     <div class="challenge-header">
         <div class="timer-area"><span>⏱️</span> <span id="timerDisplay">练习中</span></div>
         <div class="challenge-actions">
-            <button id="soundToggleBtn" class="sound-toggle" type="button" aria-label="关闭声音">♪</button>
-            <button id="resetChallengeBtn" class="reset-challenge-btn" aria-label="重新开始">↻</button>
+            <button id="soundToggleBtn" class="sound-toggle" data-yiqi-action="icon" type="button" aria-label="关闭声音">♪</button>
+            <button id="resetChallengeBtn" class="reset-challenge-btn" data-yiqi-action="icon" aria-label="重新开始">↻</button>
         </div>
     </div>
-    <button id="startGameBtn" class="start-game-btn">🎮 答题模式</button>
+    <button id="startGameBtn" class="start-game-btn" data-yiqi-action="answer">🎮 答题模式</button>
     <div class="current-card">
         <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共14题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
@@ -600,7 +600,7 @@ window.fetch = function(url, options) {
     <div class="numpad" id="numpad">
         <button data-digit="1">1</button><button data-digit="2">2</button><button data-digit="3">3</button><button class="del-btn" data-action="del" aria-label="删除">⌫</button>
         <button data-digit="4">4</button><button data-digit="5">5</button><button data-digit="6">6</button><button data-digit="0">0</button>
-        <button data-digit="7">7</button><button data-digit="8">8</button><button data-digit="9">9</button><button class="submit-key" data-action="submit">提交</button>
+        <button data-digit="7">7</button><button data-digit="8">8</button><button data-digit="9">9</button><button class="submit-key" data-action="submit" data-yiqi-action="answer">提交</button>
     </div>
     <div id="challengeResultMsg" class="challenge-result"></div>
     <div id="wrongQuestionsContainer" class="wrong-questions" style="display: none;"></div>
