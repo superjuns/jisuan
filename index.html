@@ -1168,6 +1168,32 @@ window.fetch = function(url, options) {
     let correctCount = 0;
     let wrongQuestions = [];
     let nextQuestionTimer = null;
+    const DAILY_SCORE_API = 'https://bjugehxenrvaqtodjkbc.supabase.co/rest/v1/scores_meiriyilian';
+    const DAILY_LEADERBOARD_API = DAILY_SCORE_API + '?select=*';
+    let yiqiGameSdk = null;
+
+    function initYiqiGameSdk() {
+        if (!yiqiGameSdk && window.YiqiMath) {
+            yiqiGameSdk = window.YiqiMath.init({
+                gameId: 'daily-practice',
+                scoreEndpoint: DAILY_SCORE_API,
+                leaderboardEndpoint: DAILY_LEADERBOARD_API,
+                ranking: 'score-desc',
+                includeGameId: false
+            });
+        }
+        return yiqiGameSdk;
+    }
+
+    function syncIdentityFromSdk() {
+        const sdk = initYiqiGameSdk();
+        const identity = sdk && sdk.getIdentity();
+        if (!identity) return false;
+        localStorage.setItem('jisuan_class', identity.class);
+        localStorage.setItem('jisuan_name', identity.name);
+        currentStudent = { class: identity.class, name: identity.name };
+        return true;
+    }
 
     // ---------- 白名单验证 ----------
     let whiteListCache = null;
@@ -1192,6 +1218,8 @@ window.fetch = function(url, options) {
             localStorage.setItem('jisuan_class', normCls);
             localStorage.setItem('jisuan_name', name);
             currentStudent = { class: normCls, name: name };
+            const sdk = initYiqiGameSdk();
+            if (sdk) sdk.setIdentity(currentStudent);
             return true;
         } catch (e) { return false; }
     }
@@ -1382,6 +1410,8 @@ window.fetch = function(url, options) {
                 document.getElementById('startGameBtn').innerText = '⏹ 结束答题';
                     localStorage.setItem('jisuan_class', cls);
                     localStorage.setItem('jisuan_name', name);
+                const sdk = initYiqiGameSdk();
+                if (sdk) sdk.setIdentity(currentStudent);
                 resetChallenge();
                 startTimer();
                 loadLeaderboard();
@@ -1449,8 +1479,13 @@ window.fetch = function(url, options) {
 
     async function loadLeaderboard() { 
         try { 
-            const response = await fetch('https://bjugehxenrvaqtodjkbc.supabase.co/rest/v1/scores_meiriyilian?select=*'); 
-            const data = await response.json(); 
+            const sdk = initYiqiGameSdk();
+            let data;
+            if (sdk) data = await sdk.request(DAILY_LEADERBOARD_API);
+            else {
+                const response = await fetch(DAILY_LEADERBOARD_API);
+                data = await response.json();
+            }
             const submissions = data || []; 
             // 获取北京时间今天的日期字符串 (YYYY-MM-DD)
             const today = getBeijingTodayStr();
@@ -1619,10 +1654,7 @@ window.fetch = function(url, options) {
                 stopTimer();
                 const finalScore = correctCount;
                 // 新接口提交
-                fetch('https://bjugehxenrvaqtodjkbc.supabase.co/rest/v1/scores_meiriyilian', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                const scorePayload = {
                         class: currentStudent.class,
                         name: currentStudent.name,
                         score: finalScore,
@@ -1634,8 +1666,17 @@ window.fetch = function(url, options) {
                             question_type: w.questionType
                         })),
                         submitted_at: new Date().toISOString()
-                    })
-                }).then(() => { 
+                    };
+                const sdk = initYiqiGameSdk();
+                const scoreRequest = sdk
+                    ? sdk.submitScore(scorePayload, { includeGameId: false })
+                    : fetch(DAILY_SCORE_API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(scorePayload)
+                    });
+                scoreRequest.then(() => {
+                    if (sdk && wrongQuestions.length) sdk.emit('mistakes-recorded', { count: wrongQuestions.length });
                     showFinalResult(finalScore, seconds); 
                     loadLeaderboard(); 
                 }).catch(err => showFinalResult(finalScore, seconds));
@@ -1679,8 +1720,13 @@ window.fetch = function(url, options) {
             let rankMsg = '';
             await new Promise(resolve => setTimeout(resolve, 1200));
             try {
-                const response = await fetch('https://bjugehxenrvaqtodjkbc.supabase.co/rest/v1/scores_meiriyilian?select=*');
-                const data = await response.json();
+                const sdk = initYiqiGameSdk();
+                let data;
+                if (sdk) data = await sdk.request(DAILY_LEADERBOARD_API);
+                else {
+                    const response = await fetch(DAILY_LEADERBOARD_API);
+                    data = await response.json();
+                }
                 const submissions = data || [];
                 // 计算排名（仅看当前用户最佳成绩）
                 const bestMap = new Map();
@@ -1867,7 +1913,9 @@ window.fetch = function(url, options) {
     }
     soundToggleBtn.addEventListener('click', () => {
         yiqiSoundOn = !yiqiSoundOn;
-        localStorage.setItem('yiqi_game_sound', yiqiSoundOn ? 'on' : 'off');
+        const sdk = initYiqiGameSdk();
+        if (sdk) sdk.sound.setEnabled(yiqiSoundOn);
+        else localStorage.setItem('yiqi_game_sound', yiqiSoundOn ? 'on' : 'off');
         syncSoundToggle();
         if (yiqiSoundOn) yiqiPlayTone(false);
     });
@@ -1881,6 +1929,7 @@ window.fetch = function(url, options) {
     challengePanel.classList.add('active');
 
     // URL参数自动登录（平台跳转时免输入）
+    syncIdentityFromSdk();
     tryAutoLoginFromUrl();
 </script>
 </body>
