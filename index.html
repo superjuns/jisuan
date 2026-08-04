@@ -475,16 +475,16 @@ window.fetch = function(url, options) {
         .date-nav-btn { background:#e9e9eb; color:var(--ink); }
         .action-btn { background:var(--blue); padding:7px 14px; }
         .export-btn { background:var(--orange); }
-        .section-title { margin-top:14px; padding:4px 10px; border:0; border-radius:9px; background:#fff4da; color:#73520b; }
+        .section-title { margin-top:14px; padding:5px 11px; border:0; border-radius:10px; background:#f2f2f7; color:#1d1d1f; font-weight:700; }
         .question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
         .question-item,.vertical-item { min-width:0; border:1px solid #e5e5ea; border-radius:16px; background:#fff; }
         .question-item { min-height:48px; align-items:center; }
         .vertical-item { min-height:190px; }
         .q-text { overflow-wrap:anywhere; }
-        .challenge-header { margin-bottom:12px; padding:10px 12px; border-radius:16px; background:var(--ink); }
-        .timer-area { min-height:36px; padding:5px 10px; border-radius:11px; background:rgba(255,255,255,.12); color:white; }
+        .challenge-header { margin-bottom:12px; padding:8px; border-radius:16px; background:#f2f2f7; }
+        .timer-area { min-height:40px; padding:6px 11px; border-radius:12px; background:white; color:#1d1d1f; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .challenge-actions { display:flex; gap:8px; }
-        .sound-toggle,.reset-challenge-btn { width:40px; height:40px; padding:0; justify-content:center; border:0; border-radius:12px; background:rgba(255,255,255,.12); color:white; box-shadow:none; }
+        .sound-toggle,.reset-challenge-btn { width:40px; height:40px; padding:0; justify-content:center; border:0; border-radius:12px; background:white; color:#1d1d1f; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .start-game-btn { width:100%; min-height:48px; margin:0 0 12px; border-radius:15px; background:var(--blue); box-shadow:0 7px 18px rgba(10,132,255,.18); }
         .current-card { min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); }
         .current-question { margin:18px 0; font-family:ui-monospace,"SFMono-Regular","PingFang SC",monospace; font-size:clamp(1.35rem,5vw,2rem); line-height:1.45; }
@@ -498,7 +498,8 @@ window.fetch = function(url, options) {
         .vertical-blanks { background:var(--soft); }
         .vertical-line { border-color:var(--ink); }
         .vb-input,.vb-input-wide { border-color:#d2d2d7; background:white; }
-        .challenge-result { border-radius:18px; background:#fff6e5; color:#6f4c00; }
+        .challenge-result { border-radius:16px; background:#f2f2f7; color:#1d1d1f; }
+        .challenge-result:empty { display:none; }
         .wrong-questions { border-radius:18px; background:#fff1ef; }
         .wrong-questions li { border-color:#ffd0ca; }
         .leaderboard-rank { border:0; padding-top:8px; }
