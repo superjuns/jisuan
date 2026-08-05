@@ -1593,21 +1593,30 @@ window.fetch = function(url, options) {
         cheer.hideTimer = setTimeout(() => cheer.classList.remove('show'), 1400);
     }
 
+    function yiqiSafeConfetti(options) {
+        try {
+            const fire = window.canvasConfetti || window.confetti;
+            if (typeof fire === 'function') fire(options);
+        } catch (error) {
+            console.warn('撒花反馈暂不可用', error);
+        }
+    }
+
     function triggerAnswerCelebration(streak) {
         yiqiPlayTone(false);
         yiqiShowCheer(streak >= 2 ? `连续答对 ${streak} 题 ✨` : '答对啦！继续加油 ✨');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        if (streak > 0 && streak % 5 === 0) canvasConfetti({ particleCount: 42, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
+        if (streak > 0 && streak % 5 === 0) yiqiSafeConfetti({ particleCount: 42, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
     }
 
     function triggerConfetti() { 
         yiqiPlayTone(true);
         yiqiShowCheer('完成啦！数学小能手 ✨');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        canvasConfetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
+        yiqiSafeConfetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
         setTimeout(() => { 
-            canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.2 }, startVelocity: 15 }); 
-            canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.8 }, startVelocity: 15 }); 
+            yiqiSafeConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.2 }, startVelocity: 15 });
+            yiqiSafeConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.8 }, startVelocity: 15 });
         }, 150); 
     }
 
@@ -1850,6 +1859,7 @@ window.fetch = function(url, options) {
         challengeQuestions = generateChallengeQuestions();
         currentIndex = 0;
         correctCount = 0;
+        yiqiAnswerStreak = 0;
         wrongQuestions = [];
         document.getElementById('challengeResultMsg').innerHTML = '';
         if (!isContestMode) document.getElementById('timerDisplay').innerText = '练习中';
