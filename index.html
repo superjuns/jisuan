@@ -1321,26 +1321,10 @@ window.fetch = function(url, options) {
             if (feedbackDiv) feedbackDiv.innerHTML = '';
             return;
         }
-        // 如果已有登录信息，直接开始
+        // 先同步全站身份；已有信息时仍显示验证状态，避免后台静默失败。
+        syncIdentityFromSdk();
         const savedCls = localStorage.getItem('jisuan_class');
         const savedName = localStorage.getItem('jisuan_name');
-        if (savedCls && savedName) {
-            isInWhitelist(savedCls, savedName).then(allowed => {
-                if (allowed) {
-                    const daily = checkAndRecordDailyAttempt(savedCls, savedName);
-                    if (daily.allowed) {
-                        if (timer) clearInterval(timer);
-                        isContestMode = true;
-                        currentStudent = { class: savedCls, name: savedName };
-                        document.getElementById('startGameBtn').innerText = '⏹ 结束答题';
-                        resetChallenge();
-                        startTimer();
-                        loadLeaderboard();
-                    }
-                }
-            }).catch(() => {});
-            return;
-        }
 
         if (isContestMode && !confirm('当前有未完成的闯关，确定要重新开始吗？')) return;
 
@@ -1432,6 +1416,14 @@ window.fetch = function(url, options) {
 
         cancelBtn.addEventListener('click', closeIdentityModal);
         modal.addEventListener('click', (e) => { if (e.target === modal) closeIdentityModal(); });
+        if (savedCls && savedName) {
+            classSelect.value = savedCls;
+            nameInput.value = savedName;
+            errorDiv.style.display = 'block';
+            errorDiv.style.color = '#6e6e73';
+            errorDiv.innerText = '正在验证已登录身份...';
+            requestAnimationFrame(() => confirmBtn.click());
+        }
     }
 
     function generateVerticalChallenge() { 
