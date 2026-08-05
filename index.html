@@ -1682,6 +1682,9 @@ window.fetch = function(url, options) {
             }
             wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
         }
+        if (feedbackSdk && feedbackSdk.feedback) {
+            feedbackSdk.feedback.progress({ completed:currentIndex + 1, total:totalQ, correct:correctCount });
+        }
 
         const feedbackDiv = document.getElementById('currentFeedback');
         if (!isContestMode) {
