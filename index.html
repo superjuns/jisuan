@@ -510,6 +510,12 @@ window.fetch = function(url, options) {
         .sound-toggle,.reset-challenge-btn { width:40px; height:40px; padding:0; justify-content:center; border:0; border-radius:12px; background:white; color:#1d1d1f; box-shadow:0 1px 3px rgba(0,0,0,.06); }
         .start-game-btn { width:100%; min-height:48px; margin:0 0 12px; border-radius:15px; background:var(--blue); box-shadow:0 7px 18px rgba(10,132,255,.18); }
         .current-card { --daily-progress:7.14%; position:relative; min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); overflow:hidden; }
+        .current-card.yiqi-answer-correct { animation:yiqi-daily-confirm 420ms cubic-bezier(.2,.8,.2,1); }
+        .current-card.yiqi-answer-wrong { animation:yiqi-daily-shake 300ms ease-out; }
+        .yiqi-streak-chip { position:absolute; right:14px; top:14px; z-index:2; padding:6px 10px; border-radius:999px; background:#fff3df; color:#a85b00; font-size:.78rem; font-weight:800; animation:yiqi-chip-in 360ms cubic-bezier(.2,.8,.2,1); }
+        @keyframes yiqi-daily-confirm { 0%{transform:scale(.985)} 55%{transform:scale(1.012);box-shadow:0 8px 24px rgba(0,122,255,.12)} 100%{transform:scale(1)} }
+        @keyframes yiqi-daily-shake { 0%,100%{transform:translateX(0)} 30%{transform:translateX(-5px)} 65%{transform:translateX(4px)} }
+        @keyframes yiqi-chip-in { from{transform:translateY(-5px) scale(.9);opacity:0} to{transform:none;opacity:1} }
         .daily-progress { width:min(280px,72%); height:5px; margin:9px auto 0; overflow:hidden; border-radius:999px; background:#e9e9eb; }
         .daily-progress span { display:block; width:var(--daily-progress); height:100%; border-radius:inherit; background:var(--orange); transition:width 260ms cubic-bezier(.23,1,.32,1); }
         .current-question { margin:18px 0; font-family:ui-monospace,"SFMono-Regular","PingFang SC",monospace; font-size:clamp(1.35rem,5vw,2rem); line-height:1.45; }
@@ -1168,6 +1174,7 @@ window.fetch = function(url, options) {
     let correctCount = 0;
     let wrongQuestions = [];
     let nextQuestionTimer = null;
+    let yiqiAnswerStreak = 0;
     const DAILY_SCORE_API = 'https://bjugehxenrvaqtodjkbc.supabase.co/rest/v1/scores_meiriyilian';
     const DAILY_LEADERBOARD_API = DAILY_SCORE_API + '?select=*';
     let yiqiGameSdk = null;
@@ -1586,11 +1593,11 @@ window.fetch = function(url, options) {
         cheer.hideTimer = setTimeout(() => cheer.classList.remove('show'), 1400);
     }
 
-    function triggerAnswerCelebration() {
+    function triggerAnswerCelebration(streak) {
         yiqiPlayTone(false);
-        yiqiShowCheer('答对啦！继续加油 ✨');
+        yiqiShowCheer(streak >= 2 ? `连续答对 ${streak} 题 ✨` : '答对啦！继续加油 ✨');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        canvasConfetti({ particleCount: 36, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
+        if (streak > 0 && streak % 5 === 0) canvasConfetti({ particleCount: 42, spread: 55, startVelocity: 20, scalar: 0.75, origin: { y: 0.66 }, colors: ['#007aff', '#5e5ce6', '#ff9f0a', '#ff375f', '#64d2ff'] });
     }
 
     function triggerConfetti() { 
@@ -1633,11 +1640,39 @@ window.fetch = function(url, options) {
         const isCorrect = (parseInt(userVal) === q.answer);
         q.answered = true;
         q.correct = isCorrect;
+        const answerCard = document.querySelector('.current-card');
+        if (answerCard) answerCard.classList.remove('yiqi-answer-correct', 'yiqi-answer-wrong');
+        const feedbackSdk = initYiqiGameSdk();
         if (isCorrect) {
             correctCount++;
-            triggerAnswerCelebration();
+            yiqiAnswerStreak++;
+            if (answerCard) {
+                void answerCard.offsetWidth;
+                answerCard.classList.add('yiqi-answer-correct');
+                const oldChip = answerCard.querySelector('.yiqi-streak-chip');
+                if (oldChip) oldChip.remove();
+                if (yiqiAnswerStreak >= 2) {
+                    const chip = document.createElement('span');
+                    chip.className = 'yiqi-streak-chip';
+                    chip.textContent = `连续 ${yiqiAnswerStreak} 题`;
+                    answerCard.appendChild(chip);
+                }
+            }
+            triggerAnswerCelebration(yiqiAnswerStreak);
+            if (feedbackSdk && feedbackSdk.feedback) {
+                feedbackSdk.feedback.correct({ answer:parseInt(userVal), question:currentIndex + 1 });
+                feedbackSdk.feedback.streak({ count:yiqiAnswerStreak });
+            }
         }
-        else wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
+        else {
+            yiqiAnswerStreak = 0;
+            if (answerCard) { void answerCard.offsetWidth; answerCard.classList.add('yiqi-answer-wrong'); }
+            if (feedbackSdk && feedbackSdk.feedback) {
+                feedbackSdk.feedback.wrong({ answer:userVal, expected:q.answer, question:currentIndex + 1 });
+                feedbackSdk.feedback.streak({ count:0 });
+            }
+            wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
+        }
 
         const feedbackDiv = document.getElementById('currentFeedback');
         if (!isContestMode) {
@@ -1776,7 +1811,12 @@ window.fetch = function(url, options) {
         if (dailyProgress) dailyProgress.style.display = 'block';
         if (feedbackDiv) feedbackDiv.innerHTML = '';
         const currentCard = document.querySelector('.current-card');
-        if (currentCard) currentCard.style.setProperty('--daily-progress', `${((currentIndex + 1) / totalQ) * 100}%`);
+        if (currentCard) {
+            currentCard.classList.remove('yiqi-answer-correct', 'yiqi-answer-wrong');
+            const streakChip = currentCard.querySelector('.yiqi-streak-chip');
+            if (streakChip) streakChip.remove();
+            currentCard.style.setProperty('--daily-progress', `${((currentIndex + 1) / totalQ) * 100}%`);
+        }
         const q = challengeQuestions[currentIndex];
         document.getElementById('currentQuestionNum').innerText = `第${currentIndex+1}题 / 共${totalQ}题`;
         if (q.type === 'vertical') {
