@@ -195,8 +195,9 @@ window.fetch = function(url, options) {
             display: flex;
             align-items: flex-end;
             gap: 4px;
-            height: 13px;
-            margin-bottom: -2px;
+            height: 10px;
+            margin-top: -3px;
+            margin-bottom: -3px;
             color: #d32f2f;
             font-size: 0.68rem;
             line-height: 1;
@@ -907,11 +908,6 @@ window.fetch = function(url, options) {
         };
         return `
             <div class="vertical-calculation">
-                <div class="vertical-carry-row">
-                    <span style="display:inline-block; width:28px;"></span>
-                    <span class="vertical-carry-one" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
-                    <span class="vertical-carry-one"></span>
-                </div>
                 <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 2px;">
                     <span style="display:inline-block; width:28px;"></span>
                     <span class="vb-digit-fixed">${formatDigit(tensA, true)}</span>
@@ -921,6 +917,11 @@ window.fetch = function(url, options) {
                     <span class="vb-op-fixed">${op}</span>
                     <span class="vb-digit-fixed">${formatDigit(tensB, true)}</span>
                     <span class="vb-digit-fixed">${onesB}</span>
+                </div>
+                <div class="vertical-carry-row">
+                    <span style="display:inline-block; width:28px;"></span>
+                    <span class="vertical-carry-one" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
+                    <span class="vertical-carry-one"></span>
                 </div>
                 <div class="vertical-line"></div>
                 <div style="display: flex; align-items: baseline; gap: 4px;">
