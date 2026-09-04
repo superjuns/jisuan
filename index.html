@@ -756,28 +756,6 @@ window.fetch = function(url, options) {
         return { a: 26, b: 37, sum: 63 };
     }
 
-    // 20以内进位加法、退位减法（直接求结果）
-    function generateWithin20CarryBorrow() {
-        for (let attempt = 0; attempt < 100; attempt++) {
-            const isAdd = currentRandom() < 0.5;
-            if (isAdd) {
-                let a = Math.floor(currentRandom() * 9) + 1;
-                let b = Math.floor(currentRandom() * 9) + 1;
-                let sum = a + b;
-                if (sum < 11 || sum > 20) continue;
-                return { text: `${a} + ${b} = (   )`, answer: sum };
-            } else {
-                let minuend = Math.floor(currentRandom() * 9) + 11;
-                let subtrahend = Math.floor(currentRandom() * 9) + 1;
-                if (subtrahend > (minuend % 10)) {
-                    let diff = minuend - subtrahend;
-                    if (diff >= 2 && diff <= 9) return { text: `${minuend} - ${subtrahend} = (   )`, answer: diff };
-                }
-            }
-        }
-        return { text: `15 - 7 = (   )`, answer: 8 };
-    }
-
     // 100以内进位加法竖式
     function generateVerticalCarryAddition() {
         const { a, b, sum } = generateCarryAddition100();
@@ -888,12 +866,11 @@ window.fetch = function(url, options) {
     // 当前课程进度：8道口算 + 2道100以内进位加法竖式
     function buildExerciseSet() {
         let oral=[];
-        for(let i=0;i<3;i++) oral.push(generateDirect100Mixed());
-        for(let i=0;i<3;i++) {
+        for(let i=0;i<4;i++) oral.push(generateDirect100Mixed());
+        for(let i=0;i<4;i++) {
             const { a, b, sum } = generateCarryAddition100();
             oral.push({ text: `${a} + ${b} = (   )`, answer: sum });
         }
-        for(let i=0;i<2;i++) oral.push(generateWithin20CarryBorrow());
         let vertical = [generateVerticalCarryAddition(), generateVerticalCarryAddition()];
         return { oral, vertical };
     }
@@ -1447,16 +1424,15 @@ window.fetch = function(url, options) {
         return { type: 'vertical', displayHtml: html, answer: expectedAnswer, text: textForDisplay };
     }
 
-    // 生成闯关题目：3道不进位/不退位 + 3道进位加法 + 2道20以内进退位 + 2道进位竖式
+    // 生成闯关题目：4道100以内不进位/不退位 + 4道100以内进位加法 + 2道进位竖式
     function generateChallengeQuestions() { 
         const seed = Date.now(); 
         const rng = createSeededRandom(seed); 
         const oldRand = currentRandom; 
         currentRandom = rng; 
         let items = []; 
-        for(let i=0;i<3;i++) items.push(generateDirect100Mixed());
-        for(let i=0;i<3;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
-        for(let i=0;i<2;i++) items.push(generateWithin20CarryBorrow());
+        for(let i=0;i<4;i++) items.push(generateDirect100Mixed());
+        for(let i=0;i<4;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
         for(let i=0;i<2;i++) items.push(generateVerticalChallenge()); 
         currentRandom = oldRand; 
         return items.map(q => ({ ...q, userAnswer: '', correct: false, answered: false })); 
