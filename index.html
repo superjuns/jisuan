@@ -818,6 +818,52 @@ window.fetch = function(url, options) {
         }
     }
 
+    // 两位数加减一位数：不进位或不退位
+    function generateOneDigitNoCarryBorrow(forceOperation) {
+        if (forceOperation === '+' || (forceOperation !== '-' && currentRandom() < 0.5)) {
+            for (let attempt = 0; attempt < 100; attempt++) {
+                const a = Math.floor(currentRandom() * 80) + 11;
+                const b = Math.floor(currentRandom() * 9) + 1;
+                const sum = a + b;
+                if ((a % 10) + b <= 9 && sum <= 99) {
+                    return { text: `${a} + ${b} = (   )`, answer: sum };
+                }
+            }
+            return { text: `32 + 5 = (   )`, answer: 37 };
+        }
+        for (let attempt = 0; attempt < 100; attempt++) {
+            const minuend = Math.floor(currentRandom() * 89) + 11;
+            const subtrahend = Math.floor(currentRandom() * 9) + 1;
+            if ((minuend % 10) >= subtrahend) {
+                return { text: `${minuend} - ${subtrahend} = (   )`, answer: minuend - subtrahend };
+            }
+        }
+        return { text: `38 - 5 = (   )`, answer: 33 };
+    }
+
+    // 两位数加减一位数：进位或退位
+    function generateOneDigitCarryBorrow(forceOperation) {
+        if (forceOperation === '+' || (forceOperation !== '-' && currentRandom() < 0.5)) {
+            for (let attempt = 0; attempt < 100; attempt++) {
+                const a = Math.floor(currentRandom() * 80) + 11;
+                const b = Math.floor(currentRandom() * 9) + 1;
+                const sum = a + b;
+                if ((a % 10) + b >= 10 && sum <= 99) {
+                    return { text: `${a} + ${b} = (   )`, answer: sum };
+                }
+            }
+            return { text: `36 + 7 = (   )`, answer: 43 };
+        }
+        for (let attempt = 0; attempt < 100; attempt++) {
+            const minuend = Math.floor(currentRandom() * 89) + 11;
+            const subtrahend = Math.floor(currentRandom() * 9) + 1;
+            if ((minuend % 10) < subtrahend) {
+                return { text: `${minuend} - ${subtrahend} = (   )`, answer: minuend - subtrahend };
+            }
+        }
+        return { text: `42 - 7 = (   )`, answer: 35 };
+    }
+
     // 普通求未知数（序号5、6），已知数之间的差绝对值不小于5
     function generateMissingAddendMixed() {
         for (let attempt = 0; attempt < 100; attempt++) {
@@ -866,8 +912,10 @@ window.fetch = function(url, options) {
     // 当前课程进度：8道口算 + 2道100以内进位加法竖式
     function buildExerciseSet() {
         let oral=[];
-        for(let i=0;i<4;i++) oral.push(generateDirect100Mixed());
-        for(let i=0;i<4;i++) {
+        for(let i=0;i<2;i++) oral.push(generateDirect100Mixed());
+        oral.push(generateOneDigitNoCarryBorrow('+'), generateOneDigitNoCarryBorrow('-'));
+        oral.push(generateOneDigitCarryBorrow('+'), generateOneDigitCarryBorrow('-'));
+        for(let i=0;i<2;i++) {
             const { a, b, sum } = generateCarryAddition100();
             oral.push({ text: `${a} + ${b} = (   )`, answer: sum });
         }
@@ -1424,15 +1472,17 @@ window.fetch = function(url, options) {
         return { type: 'vertical', displayHtml: html, answer: expectedAnswer, text: textForDisplay };
     }
 
-    // 生成闯关题目：4道100以内不进位/不退位 + 4道100以内进位加法 + 2道进位竖式
+    // 生成闯关题目：含两位数加减一位数的进退位与不进退位，共8道口算 + 2道进位竖式
     function generateChallengeQuestions() { 
         const seed = Date.now(); 
         const rng = createSeededRandom(seed); 
         const oldRand = currentRandom; 
         currentRandom = rng; 
         let items = []; 
-        for(let i=0;i<4;i++) items.push(generateDirect100Mixed());
-        for(let i=0;i<4;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
+        for(let i=0;i<2;i++) items.push(generateDirect100Mixed());
+        items.push(generateOneDigitNoCarryBorrow('+'), generateOneDigitNoCarryBorrow('-'));
+        items.push(generateOneDigitCarryBorrow('+'), generateOneDigitCarryBorrow('-'));
+        for(let i=0;i<2;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
         for(let i=0;i<2;i++) items.push(generateVerticalChallenge()); 
         currentRandom = oldRand; 
         return items.map(q => ({ ...q, userAnswer: '', correct: false, answered: false })); 
