@@ -191,6 +191,22 @@ window.fetch = function(url, options) {
             text-align: center;
             font-weight: 700;
         }
+        .vertical-carry-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 13px;
+            margin-bottom: -2px;
+            color: #d32f2f;
+            font-size: 0.68rem;
+            line-height: 1;
+        }
+        .vertical-carry-one {
+            display: inline-block;
+            width: 32px;
+            text-align: right;
+            font-weight: 800;
+        }
         .q-num {
             font-size: 1rem;
             font-weight: 700;
@@ -615,7 +631,7 @@ window.fetch = function(url, options) {
     </div>
     <button id="startGameBtn" class="start-game-btn" data-yiqi-action="answer">🎮 答题模式</button>
     <div class="current-card">
-        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共14题</div>
+        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共10题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback"></div>
@@ -725,67 +741,43 @@ window.fetch = function(url, options) {
         return { minuend: 45, subtrahend: 23, diff: 22 };
     }
 
-    // 20以内进退位求未知数，等号只有一侧超过10，且不出现10
-    function generateWithin20Missing() {
+    // 100以内进位加法：个位和满十，结果不超过100
+    function generateCarryAddition100() {
+        for (let attempt = 0; attempt < 160; attempt++) {
+            const a = Math.floor(currentRandom() * 80) + 11;
+            const b = Math.floor(currentRandom() * 80) + 11;
+            const sum = a + b;
+            if (sum <= 99 && (a % 10) + (b % 10) >= 10) return { a, b, sum };
+        }
+        return { a: 26, b: 37, sum: 63 };
+    }
+
+    // 20以内进位加法、退位减法（直接求结果）
+    function generateWithin20CarryBorrow() {
         for (let attempt = 0; attempt < 100; attempt++) {
-            const type = Math.floor(currentRandom() * 4);
-            if (type < 2) { // 加法：和>10，加数1-9
+            const isAdd = currentRandom() < 0.5;
+            if (isAdd) {
                 let a = Math.floor(currentRandom() * 9) + 1;
                 let b = Math.floor(currentRandom() * 9) + 1;
                 let sum = a + b;
                 if (sum < 11 || sum > 20) continue;
-                if (type === 0) return { text: `(   ) + ${b} = ${sum}`, answer: a };
-                else return { text: `${a} + (   ) = ${sum}`, answer: b };
-            } else { // 减法：被减数11-19，减数1-9，差1-9且≠1
+                return { text: `${a} + ${b} = (   )`, answer: sum };
+            } else {
                 let minuend = Math.floor(currentRandom() * 9) + 11;
                 let subtrahend = Math.floor(currentRandom() * 9) + 1;
                 if (subtrahend > (minuend % 10)) {
                     let diff = minuend - subtrahend;
-                    if (diff >= 2 && diff <= 9) {
-                        if (type === 2) return { text: `(   ) - ${subtrahend} = ${diff}`, answer: minuend };
-                        else return { text: `${minuend} - (   ) = ${diff}`, answer: subtrahend };
-                    }
+                    if (diff >= 2 && diff <= 9) return { text: `${minuend} - ${subtrahend} = (   )`, answer: diff };
                 }
             }
         }
-        return { text: `(   ) + 8 = 17`, answer: 9 };
+        return { text: `15 - 7 = (   )`, answer: 8 };
     }
 
-    // 竖式（加减各一）
-    function generateVerticalWithType(isAdd) {
-        if (isAdd) {
-            for (let attempt = 0; attempt < 40; attempt++) {
-                let tensA = Math.floor(currentRandom() * 9) + 1;
-                let maxTensB = 9 - tensA;
-                if (maxTensB < 0) continue;
-                let tensB = Math.floor(currentRandom() * (maxTensB + 1));
-                let onesA = Math.floor(currentRandom() * 9) + 1;
-                let maxOnesB = 9 - onesA;
-                if (maxOnesB < 0) continue;
-                let onesB = Math.floor(currentRandom() * (maxOnesB + 1));
-                let a = tensA * 10 + onesA;
-                let b = tensB * 10 + onesB;
-                let sum = a + b;
-                if (sum <= 99 && sum % 10 !== 0 && a >= 10 && b >= 10 && (a%10)!==0 && (b%10)!==0) {
-                    return { text: `${a} + ${b} = (   )`, answer: sum, a, b, op: '+', result: sum };
-                }
-            }
-            return { text: `23 + 14 = (   )`, answer: 37, a: 23, b: 14, op: '+', result: 37 };
-        } else {
-            for (let attempt = 0; attempt < 40; attempt++) {
-                let tensM = Math.floor(currentRandom() * 9) + 1;
-                let tensS = Math.floor(currentRandom() * (tensM + 1));
-                let onesM = Math.floor(currentRandom() * 9) + 1;
-                let onesS = Math.floor(currentRandom() * (onesM + 1));
-                let minuend = tensM * 10 + onesM;
-                let subtrahend = tensS * 10 + onesS;
-                let diff = minuend - subtrahend;
-                if (diff >= 2 && diff <= 99 && diff % 10 !== 0 && minuend >= 10 && subtrahend >= 10 && (minuend%10)!==0 && (subtrahend%10)!==0) {
-                    return { text: `${minuend} - ${subtrahend} = (   )`, answer: diff, a: minuend, b: subtrahend, op: '-', result: diff };
-                }
-            }
-            return { text: `45 - 23 = (   )`, answer: 22, a: 45, b: 23, op: '-', result: 22 };
-        }
+    // 100以内进位加法竖式
+    function generateVerticalCarryAddition() {
+        const { a, b, sum } = generateCarryAddition100();
+        return { text: `${a} + ${b} = (   )`, answer: sum, a, b, op: '+', result: sum, carry: 1 };
     }
 
     // 混合运算 (不出现整十、差1)
@@ -889,14 +881,16 @@ window.fetch = function(url, options) {
         return generateMissingSubtrahendMixed();
     }
 
-    // 构建课堂练习：口算12题，竖式2题
+    // 当前课程进度：8道口算 + 2道100以内进位加法竖式
     function buildExerciseSet() {
         let oral=[];
-        for(let i=0;i<4;i++) oral.push(generateDirect100Mixed());      // ①~④
-        for(let i=0;i<2;i++) oral.push(getRandomReverseMixed());        // ⑤~⑥
-        for(let i=0;i<4;i++) oral.push(generateMixed20WithBorrowEmphasis()); // ⑦~⑩
-        for(let i=0;i<2;i++) oral.push(generateWithin20Missing());      // ⑪~⑫
-        let vertical = [ generateVerticalWithType(true), generateVerticalWithType(false) ];
+        for(let i=0;i<3;i++) oral.push(generateDirect100Mixed());
+        for(let i=0;i<3;i++) {
+            const { a, b, sum } = generateCarryAddition100();
+            oral.push({ text: `${a} + ${b} = (   )`, answer: sum });
+        }
+        for(let i=0;i<2;i++) oral.push(generateWithin20CarryBorrow());
+        let vertical = [generateVerticalCarryAddition(), generateVerticalCarryAddition()];
         return { oral, vertical };
     }
 
@@ -913,6 +907,11 @@ window.fetch = function(url, options) {
         };
         return `
             <div class="vertical-calculation">
+                <div class="vertical-carry-row">
+                    <span style="display:inline-block; width:28px;"></span>
+                    <span class="vertical-carry-one" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
+                    <span class="vertical-carry-one"></span>
+                </div>
                 <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 2px;">
                     <span style="display:inline-block; width:28px;"></span>
                     <span class="vb-digit-fixed">${formatDigit(tensA, true)}</span>
@@ -942,7 +941,7 @@ window.fetch = function(url, options) {
         const verticalContainer = document.getElementById('verticalGrid');
         if(oralContainer){
             oralContainer.innerHTML = '';
-            const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫'];
+            const nums = ['①','②','③','④','⑤','⑥','⑦','⑧'];
             currentOralData.forEach((item,i)=>{
                 let txt = item.text;
                 if(showingAnswers) txt = txt.replace(/\([^)]*\)/, `<span class="answer-red">(${item.answer})</span>`);
@@ -954,7 +953,7 @@ window.fetch = function(url, options) {
         }
         if(verticalContainer){
             verticalContainer.innerHTML = '';
-            const nums = ['⑬','⑭'];
+            const nums = ['⑨','⑩'];
             currentVerticalData.forEach((item,i)=>{
                 const cardDiv = document.createElement('div'); 
                 cardDiv.className = 'vertical-item';
@@ -1163,10 +1162,10 @@ window.fetch = function(url, options) {
     document.getElementById('exportBtn')?.addEventListener('click', showExportDialog);
     refreshClassroom();
 
-    // ========== 课后闯关模式 (同步课堂练习，共14题) ==========
+    // ========== 课后闯关模式（同步课堂练习，共10题） ==========
     let challengeQuestions = [];
     let currentIndex = 0;
-    let totalQ = 14;
+    let totalQ = 10;
     let timer = null;
     let seconds = 0;
     let isContestMode = false;
@@ -1427,14 +1426,11 @@ window.fetch = function(url, options) {
     }
 
     function generateVerticalChallenge() { 
-        const isAdd = currentRandom() < 0.5;
-        let num1, num2, op, result;
-        if (isAdd) { const { a, b, sum } = generateNoCarryAdditionMixed(); num1 = a; num2 = b; op = '+'; result = sum; }
-        else { const { minuend, subtrahend, diff } = generateNoBorrowSubtractionMixed(); num1 = minuend; num2 = subtrahend; op = '-'; result = diff; }
-        const blankType = Math.floor(currentRandom() * 4);
+        const { a:num1, b:num2, sum:result } = generateCarryAddition100();
+        const op = '+';
         let html = '';
-        let expectedAnswer = null;
-        let textForDisplay = `${num1} ${op} ${num2} = ?`;
+        const expectedAnswer = result;
+        const textForDisplay = `${num1} + ${num2} = ?`;
         function numberRow(num, tensBlank = false, onesBlank = false, wholeBlank = false) {
             const tens = Math.floor(num / 10);
             const ones = num % 10;
@@ -1443,24 +1439,20 @@ window.fetch = function(url, options) {
             let onesHtml = onesBlank ? `<input type="text" class="vb-input" placeholder="?" maxlength="1">` : `<span class="vb-digit">${ones}</span>`;
             return `${tensHtml}${onesHtml}`;
         }
-        if (blankType === 0) { html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result, false, false, true)}</div></div>`; expectedAnswer = result; }
-        else if (blankType === 1) { const digit = Math.random() < 0.5 ? 'tens' : 'ones'; const tensBlank = (digit === 'tens'); const onesBlank = (digit === 'ones'); html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1, tensBlank, onesBlank)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result)}</div></div>`; expectedAnswer = (digit === 'tens') ? Math.floor(num1/10) : (num1 % 10); textForDisplay = `?${digit==='tens'?'十':'个'}位?  ${num1} ${op} ${num2} = ${result}`; }
-        else if (blankType === 2) { const digit = Math.random() < 0.5 ? 'tens' : 'ones'; const tensBlank = (digit === 'tens'); const onesBlank = (digit === 'ones'); html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2, tensBlank, onesBlank)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result)}</div></div>`; expectedAnswer = (digit === 'tens') ? Math.floor(num2/10) : (num2 % 10); textForDisplay = `${num1} ${op} ${digit==='tens'?'?十':'?个'}? = ${result}`; }
-        else { html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2, false, false, true)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result)}</div></div>`; expectedAnswer = num2; textForDisplay = `${num1} ${op} ? = ${result}`; }
+        html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result, false, false, true)}</div></div>`;
         return { type: 'vertical', displayHtml: html, answer: expectedAnswer, text: textForDisplay };
     }
 
-    // 生成闯关题目：与课堂练习完全一致 4直接+2普通未知+4混合+2进退位未知+2竖式 = 14题
+    // 生成闯关题目：3道不进位/不退位 + 3道进位加法 + 2道20以内进退位 + 2道进位竖式
     function generateChallengeQuestions() { 
         const seed = Date.now(); 
         const rng = createSeededRandom(seed); 
         const oldRand = currentRandom; 
         currentRandom = rng; 
         let items = []; 
-        for(let i=0;i<4;i++) items.push(generateDirect100Mixed()); 
-        for(let i=0;i<2;i++) items.push(getRandomReverseMixed()); 
-        for(let i=0;i<4;i++) items.push(generateMixed20WithBorrowEmphasis()); 
-        for(let i=0;i<2;i++) items.push(generateWithin20Missing()); 
+        for(let i=0;i<3;i++) items.push(generateDirect100Mixed());
+        for(let i=0;i<3;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
+        for(let i=0;i<2;i++) items.push(generateWithin20CarryBorrow());
         for(let i=0;i<2;i++) items.push(generateVerticalChallenge()); 
         currentRandom = oldRand; 
         return items.map(q => ({ ...q, userAnswer: '', correct: false, answered: false })); 
