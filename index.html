@@ -208,6 +208,9 @@ window.fetch = function(url, options) {
             text-align: right;
             font-weight: 800;
         }
+        .vertical-carry-one.has-carry {
+            transform: translateX(5px);
+        }
         .q-num {
             font-size: 1rem;
             font-weight: 700;
@@ -920,7 +923,7 @@ window.fetch = function(url, options) {
                 </div>
                 <div class="vertical-carry-row">
                     <span style="display:inline-block; width:28px;"></span>
-                    <span class="vertical-carry-one" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
+                    <span class="vertical-carry-one${item.carry ? ' has-carry' : ''}" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
                     <span class="vertical-carry-one"></span>
                 </div>
                 <div class="vertical-line"></div>
