@@ -635,7 +635,7 @@ window.fetch = function(url, options) {
     </div>
     <button id="startGameBtn" class="start-game-btn" data-yiqi-action="answer">🎮 答题模式</button>
     <div class="current-card">
-        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共10题</div>
+        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共14题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback"></div>
@@ -909,56 +909,51 @@ window.fetch = function(url, options) {
         return generateMissingSubtrahendMixed();
     }
 
-    // 当前课程进度：8道口算 + 2道100以内进位加法竖式
+    function generateBorrowSubtraction100(includeHundred = false) {
+        const a = includeHundred && currentRandom() < 0.35 ? 100 : (Math.floor(currentRandom() * 8) + 2) * 10 + Math.floor(currentRandom() * 9);
+        const candidates = [];
+        for (let b = 11; b < a; b++) if (b % 10 > a % 10) candidates.push(b);
+        const b = candidates[Math.floor(currentRandom() * candidates.length)];
+        return { a, b, result: a - b, op: '-', borrow: true };
+    }
+
+    // 每套12道口算：前8道进退位计算，后4道分别求四种未知量。
     function buildExerciseSet() {
-        let oral=[];
-        for(let i=0;i<2;i++) oral.push(generateDirect100Mixed());
-        oral.push(generateOneDigitNoCarryBorrow('+'), generateOneDigitNoCarryBorrow('-'));
-        oral.push(generateOneDigitCarryBorrow('+'), generateOneDigitCarryBorrow('-'));
-        for(let i=0;i<2;i++) {
+        const oral = [];
+        for (let i = 0; i < 4; i++) {
             const { a, b, sum } = generateCarryAddition100();
             oral.push({ text: `${a} + ${b} = (   )`, answer: sum });
+            const sub = generateBorrowSubtraction100();
+            oral.push({ text: `${sub.a} - ${sub.b} = (   )`, answer: sub.result });
         }
-        let vertical = [generateVerticalCarryAddition(), generateVerticalCarryAddition()];
+        const minuend = generateBorrowSubtraction100();
+        const subtrahend = generateBorrowSubtraction100();
+        const left = generateCarryAddition100(), right = generateCarryAddition100();
+        oral.push(
+            { text: `(   ) - ${minuend.b} = ${minuend.result}`, answer: minuend.a },
+            { text: `${subtrahend.a} - (   ) = ${subtrahend.result}`, answer: subtrahend.b },
+            { text: `(   ) + ${left.b} = ${left.sum}`, answer: left.a },
+            { text: `${right.a} + (   ) = ${right.sum}`, answer: right.b }
+        );
+        const sub = generateBorrowSubtraction100(true);
+        const vertical = [generateVerticalCarryAddition(), { ...sub, text: `${sub.a} - ${sub.b} = (   )`, answer: sub.result }];
         return { oral, vertical };
     }
 
     const BLANK_HTML = '<span style="color:#ffffff;">???</span>';
-    function buildVerticalAnswerHTML(item) {
-        if (!item.a || item.b === undefined) return '';
-        const a = item.a, b = item.b, op = item.op, res = item.result;
-        const tensA = Math.floor(a / 10), onesA = a % 10;
-        const tensB = Math.floor(b / 10), onesB = b % 10;
-        const tensRes = Math.floor(res / 10), onesRes = res % 10;
-        const formatDigit = (val, isTens) => {
-            if (isTens && val === 0) return '□';
-            return val;
+    function buildVerticalAnswerHTML(item, blankResult = false) {
+        const columns = item.a === 100 ? 3 : 2;
+        const row = (number, operator = '') => {
+            const digits = String(number).padStart(columns, ' ').split('');
+            return '<div style="display:grid;grid-template-columns:28px repeat(' + columns + ',32px);gap:4px;text-align:right"><span>' + operator + '</span>' + digits.map(d => '<span>' + (d === ' ' ? '&nbsp;' : d) + '</span>').join('') + '</div>';
         };
-        return `
-            <div class="vertical-calculation">
-                <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 2px;">
-                    <span style="display:inline-block; width:28px;"></span>
-                    <span class="vb-digit-fixed">${formatDigit(tensA, true)}</span>
-                    <span class="vb-digit-fixed">${onesA}</span>
-                </div>
-                <div style="display: flex; align-items: baseline; gap: 4px;">
-                    <span class="vb-op-fixed">${op}</span>
-                    <span class="vb-digit-fixed">${formatDigit(tensB, true)}</span>
-                    <span class="vb-digit-fixed">${onesB}</span>
-                </div>
-                <div class="vertical-carry-row">
-                    <span style="display:inline-block; width:28px;"></span>
-                    <span class="vertical-carry-one${item.carry ? ' has-carry' : ''}" aria-label="满十进1" title="满十进1">${item.carry ? '1' : ''}</span>
-                    <span class="vertical-carry-one"></span>
-                </div>
-                <div class="vertical-line"></div>
-                <div style="display: flex; align-items: baseline; gap: 4px;">
-                    <span style="display:inline-block; width:28px;"></span>
-                    <span class="vb-digit-fixed">${formatDigit(tensRes, true)}</span>
-                    <span class="vb-digit-fixed">${onesRes}</span>
-                </div>
-            </div>
-        `;
+        const borrow = item.op === '-';
+        // 退位点标在被减数借出一份的数位上方；100连续退位，百位、十位各一点。
+        const marks = columns === 3 ? ['百位退位点', '十位退位点', ''] : ['十位退位点', ''];
+        const note = borrow && !blankResult ? '<div class="vertical-borrow-row" style="display:grid;grid-template-columns:28px repeat(' + columns + ',32px);gap:4px;text-align:right;color:#d32f2f;height:12px;line-height:12px;margin-bottom:2px"><span></span>' + marks.map(label => '<span>' + (label ? '<span class="vertical-borrow-dot" role="img" aria-label="' + label + '" style="display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:4px"></span>' : '') + '</span>').join('') + '</div>' : '';
+        const carry = item.carry && !blankResult ? '<div class="vertical-carry-row"><span style="width:28px"></span><span class="vertical-carry-one has-carry" aria-label="满十进1">1</span><span class="vertical-carry-one"></span></div>' : '';
+        const result = blankResult ? '<div class="vb-row"><span class="vb-op"></span><input type="text" inputmode="numeric" class="vb-input-wide" placeholder="?" maxlength="3" aria-label="计算结果"></div>' : row(item.result);
+        return '<div class="vertical-calculation" style="display:inline-block;font-variant-numeric:tabular-nums">' + note + row(item.a) + row(item.b, item.op) + carry + '<div style="border-top:2px solid currentColor;margin:4px 0"></div>' + result + '</div>';
     }
 
     // 课堂练习渲染
@@ -970,7 +965,7 @@ window.fetch = function(url, options) {
         const verticalContainer = document.getElementById('verticalGrid');
         if(oralContainer){
             oralContainer.innerHTML = '';
-            const nums = ['①','②','③','④','⑤','⑥','⑦','⑧'];
+            const nums = currentOralData.map((_, index) => String.fromCodePoint(0x2460 + index));
             currentOralData.forEach((item,i)=>{
                 let txt = item.text;
                 if(showingAnswers) txt = txt.replace(/\([^)]*\)/, `<span class="answer-red">(${item.answer})</span>`);
@@ -982,7 +977,7 @@ window.fetch = function(url, options) {
         }
         if(verticalContainer){
             verticalContainer.innerHTML = '';
-            const nums = ['⑨','⑩'];
+            const nums = currentVerticalData.map((_, index) => String.fromCodePoint(0x2460 + currentOralData.length + index));
             currentVerticalData.forEach((item,i)=>{
                 const cardDiv = document.createElement('div'); 
                 cardDiv.className = 'vertical-item';
@@ -1191,7 +1186,7 @@ window.fetch = function(url, options) {
     document.getElementById('exportBtn')?.addEventListener('click', showExportDialog);
     refreshClassroom();
 
-    // ========== 课后闯关模式（同步课堂练习，共10题） ==========
+    // ========== 课后闯关模式（同步课堂练习，共14题） ==========
     let challengeQuestions = [];
     let currentIndex = 0;
     let totalQ = 10;
@@ -1454,38 +1449,18 @@ window.fetch = function(url, options) {
         }
     }
 
-    function generateVerticalChallenge() { 
-        const { a:num1, b:num2, sum:result } = generateCarryAddition100();
-        const op = '+';
-        let html = '';
-        const expectedAnswer = result;
-        const textForDisplay = `${num1} + ${num2} = ?`;
-        function numberRow(num, tensBlank = false, onesBlank = false, wholeBlank = false) {
-            const tens = Math.floor(num / 10);
-            const ones = num % 10;
-            if (wholeBlank) return `<input type="text" class="vb-input-wide" placeholder="?" maxlength="2">`;
-            let tensHtml = tensBlank ? `<input type="text" class="vb-input" placeholder="?" maxlength="1">` : `<span class="vb-digit">${tens}</span>`;
-            let onesHtml = onesBlank ? `<input type="text" class="vb-input" placeholder="?" maxlength="1">` : `<span class="vb-digit">${ones}</span>`;
-            return `${tensHtml}${onesHtml}`;
-        }
-        html = `<div class="vertical-blanks"><div class="vb-row"><span class="vb-op"></span>${numberRow(num1)}</div><div class="vb-row"><span class="vb-op">${op}</span>${numberRow(num2)}</div><div class="vb-row"><span class="vb-op"></span><span style="width:72px; border-top:1px solid #888; margin:2px 0;"></span></div><div class="vb-row"><span class="vb-op"></span>${numberRow(result, false, false, true)}</div></div>`;
-        return { type: 'vertical', displayHtml: html, answer: expectedAnswer, text: textForDisplay };
+    function generateVerticalChallenge(item) {
+        return { ...item, type: 'vertical', displayHtml: buildVerticalAnswerHTML(item, true), text: item.text };
     }
 
-    // 生成闯关题目：含两位数加减一位数的进退位与不进退位，共8道口算 + 2道进位竖式
-    function generateChallengeQuestions() { 
-        const seed = Date.now(); 
-        const rng = createSeededRandom(seed); 
-        const oldRand = currentRandom; 
-        currentRandom = rng; 
-        let items = []; 
-        for(let i=0;i<2;i++) items.push(generateDirect100Mixed());
-        items.push(generateOneDigitNoCarryBorrow('+'), generateOneDigitNoCarryBorrow('-'));
-        items.push(generateOneDigitCarryBorrow('+'), generateOneDigitCarryBorrow('-'));
-        for(let i=0;i<2;i++) { const {a,b,sum}=generateCarryAddition100(); items.push({text:`${a} + ${b} = (   )`,answer:sum}); }
-        for(let i=0;i<2;i++) items.push(generateVerticalChallenge()); 
-        currentRandom = oldRand; 
-        return items.map(q => ({ ...q, userAnswer: '', correct: false, answered: false })); 
+    // 课堂与闯关共用12道口算、2道竖式的生成规则。
+    function generateChallengeQuestions() {
+        const oldRand = currentRandom;
+        currentRandom = createSeededRandom(Date.now());
+        try {
+            const { oral, vertical } = buildExerciseSet();
+            return [...oral, ...vertical.map(generateVerticalChallenge)].map(q => ({ ...q, userAnswer: '', correct: false, answered: false }));
+        } finally { currentRandom = oldRand; }
     }
 
     function startTimer() { if (timer) clearInterval(timer); seconds = 0; document.getElementById('timerDisplay').innerText = '0'; timer = setInterval(() => { if (isContestMode) { seconds++; document.getElementById('timerDisplay').innerText = seconds; } }, 1000); }
