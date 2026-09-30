@@ -1189,7 +1189,7 @@ window.fetch = function(url, options) {
     // ========== 课后闯关模式（同步课堂练习，共14题） ==========
     let challengeQuestions = [];
     let currentIndex = 0;
-    let totalQ = 10;
+    let totalQ = 14;
     let timer = null;
     let seconds = 0;
     let isContestMode = false;
@@ -1849,6 +1849,8 @@ window.fetch = function(url, options) {
         const oldResult = document.getElementById('finalResultDisplay');
         if (oldResult) oldResult.remove();
         challengeQuestions = generateChallengeQuestions();
+        // 与实际题集同步，避免旧题数让闯关提前结束、遗漏填空和竖式。
+        totalQ = challengeQuestions.length;
         currentIndex = 0;
         correctCount = 0;
         yiqiAnswerStreak = 0;
