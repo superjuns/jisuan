@@ -14,7 +14,7 @@ function context() {
     return ctx;
 }
 
-test('课堂与闯关共用14题：8道进退位口算、4道未知数、2道竖式', () => {
+test('课堂与闯关共用14题：6道进退位、2道未知量、4道乘法、2道竖式', () => {
     const ctx = context();
     vm.runInContext(`
         for (let seed = 1; seed <= 200; seed++) {
@@ -28,14 +28,19 @@ test('课堂与闯关共用14题：8道进退位口算、4道未知数、2道竖
             assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical].map(q => q.text));
             questions.forEach((q, index) => {
                 const equation = q.text.replace(/\\(\\s*\\)/, String(q.answer));
-                const match = equation.match(/^(\\d+) ([+-]) (\\d+) = (\\d+)$/);
+                const match = equation.match(/^(\\d+) ([+×-]) (\\d+) = (\\d+)$/);
                 assert.ok(match, equation);
                 const [, a, op, b, result] = match;
-                assert.equal(op === '+' ? +a + +b : +a - +b, +result);
-                if (index < 8) {
-                    assert.equal(op, index % 2 === 0 ? '+' : '-');
+                assert.equal(op === '+' ? +a + +b : op === '×' ? +a * +b : +a - +b, +result);
+                if (index >= 8 && index < 12) {
+                    assert.equal(op, '×');
+                    assert.ok(+a >= 1 && +a <= 9 && +b >= 1 && +b <= 9);
+                }
+                if (index < 6) {
+                    assert.match(q.text, /^\\d+ [+-] \\d+ =/);
                     assert.ok(op === '+' ? +a % 10 + +b % 10 >= 10 : +a % 10 < +b % 10);
                 }
+                if (index >= 6 && index < 8) assert.ok(!q.text.endsWith('= (   )'));
                 assert.equal(q.answered, false);
                 if (index >= 12) {
                     assert.equal(q.type, 'vertical');
@@ -44,6 +49,7 @@ test('课堂与闯关共用14题：8道进退位口算、4道未知数、2道竖
                     assert.match(q.displayHtml, /vb-input-wide/);
                 }
             });
+            assert.equal(new Set(classroom.oral.slice(8).map(q => q.text)).size, 4);
         }
     `, ctx);
 });

@@ -917,7 +917,14 @@ window.fetch = function(url, options) {
         return { a, b, result: a - b, op: '-', borrow: true };
     }
 
-    // 每套12道口算：前8道进退位计算，后4道分别求四种未知量。
+    // 分组随机删题，保留原顺序；课堂按日期种子稳定生成。
+    function removeTwoRandom(items) {
+        const kept = items.slice();
+        for (let i = 0; i < 2; i++) kept.splice(Math.floor(currentRandom() * kept.length), 1);
+        return kept;
+    }
+
+    // 每套12道口算：原8道进退位留6道、原4道未知量留2道、4道乘法。
     function buildExerciseSet() {
         const oral = [];
         for (let i = 0; i < 4; i++) {
@@ -937,7 +944,14 @@ window.fetch = function(url, options) {
         );
         const sub = generateBorrowSubtraction100(true);
         const vertical = [generateVerticalCarryAddition(), { ...sub, text: `${sub.a} - ${sub.b} = (   )`, answer: sub.result }];
-        return { oral, vertical };
+        const products = [];
+        for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) products.push({ a, b });
+        for (let i = 0; i < 4; i++) {
+            const index = Math.floor(currentRandom() * products.length);
+            const { a, b } = products.splice(index, 1)[0];
+            oral.push({ text: `${a} × ${b} = (   )`, answer: a * b });
+        }
+        return { oral: [...removeTwoRandom(oral.slice(0, 8)), ...removeTwoRandom(oral.slice(8, 12)), ...oral.slice(12)], vertical };
     }
 
     const BLANK_HTML = '<span style="color:#ffffff;">???</span>';
