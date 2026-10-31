@@ -635,7 +635,7 @@ window.fetch = function(url, options) {
     </div>
     <button id="startGameBtn" class="start-game-btn" data-yiqi-action="answer">🎮 答题模式</button>
     <div class="current-card">
-        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共14题</div>
+        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共16题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback"></div>
@@ -924,7 +924,7 @@ window.fetch = function(url, options) {
         return kept;
     }
 
-    // 每套12道口算：原8道进退位留6道、原4道未知量留2道、4道乘法。
+    // 每套14道口算：6道进退位、2道加减未知量、4道乘法、2道求未知乘数。
     function buildExerciseSet() {
         const oral = [];
         for (let i = 0; i < 4; i++) {
@@ -951,7 +951,14 @@ window.fetch = function(url, options) {
             const { a, b } = products.splice(index, 1)[0];
             oral.push({ text: `${a} × ${b} = (   )`, answer: a * b });
         }
-        return { oral: [...removeTwoRandom(oral.slice(0, 8)), ...removeTwoRandom(oral.slice(8, 12)), ...oral.slice(12)], vertical };
+        const missingFactors = [true, false].map(missingFirst => {
+            const index = Math.floor(currentRandom() * products.length);
+            const { a, b } = products.splice(index, 1)[0];
+            return missingFirst
+                ? { text: `(   ) × ${b} = ${a * b}`, answer: a }
+                : { text: `${a} × (   ) = ${a * b}`, answer: b };
+        });
+        return { oral: [...removeTwoRandom(oral.slice(0, 8)), ...removeTwoRandom(oral.slice(8, 12)), ...oral.slice(12), ...missingFactors], vertical };
     }
 
     const BLANK_HTML = '<span style="color:#ffffff;">???</span>';
@@ -1200,10 +1207,10 @@ window.fetch = function(url, options) {
     document.getElementById('exportBtn')?.addEventListener('click', showExportDialog);
     refreshClassroom();
 
-    // ========== 课后闯关模式（同步课堂练习，共14题） ==========
+    // ========== 课后闯关模式（同步课堂练习，共16题） ==========
     let challengeQuestions = [];
     let currentIndex = 0;
-    let totalQ = 14;
+    let totalQ = 16;
     let timer = null;
     let seconds = 0;
     let isContestMode = false;
