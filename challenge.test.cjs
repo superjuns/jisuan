@@ -14,7 +14,7 @@ function context() {
     return ctx;
 }
 
-test('课堂与闯关共用16题：第13、14题求未知乘数，竖式顺延', () => {
+test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', () => {
     const ctx = context();
     vm.runInContext(`
         for (let seed = 1; seed <= 200; seed++) {
@@ -22,41 +22,46 @@ test('课堂与闯关共用16题：第13、14题求未知乘数，竖式顺延',
             currentRandom = createSeededRandom(seed);
             const classroom = buildExerciseSet();
             const questions = generateChallengeQuestions();
-            assert.equal(questions.length, 16);
-            assert.equal(classroom.oral.length, 14);
+            assert.equal(questions.length, 22);
+            assert.equal(classroom.oral.length, 18);
             assert.equal(classroom.vertical.length, 2);
-            assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical].map(q => q.text));
+            assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical, ...classroom.closing].map(q => q.text));
+            const types=[]; let boundary=false, roundBorrow=false;
             questions.forEach((q, index) => {
                 const equation = q.text.replace(/\\(\\s*\\)/, String(q.answer));
                 const match = equation.match(/^(\\d+) ([+×-]) (\\d+) = (\\d+)$/);
                 assert.ok(match, equation);
                 const [, a, op, b, result] = match;
                 assert.equal(op === '+' ? +a + +b : op === '×' ? +a * +b : +a - +b, +result);
-                if (index >= 8 && index < 14) {
+                if (index >= 10 && index < 18 || index >= 20) {
                     assert.equal(op, '×');
                     assert.ok(+a >= 1 && +a <= 9 && +b >= 1 && +b <= 9);
                 }
-                if (index < 6) {
+                if (index < 8) {
                     assert.match(q.text, /^\\d+ [+-] \\d+ =/);
-                    assert.ok(op === '+' ? +a % 10 + +b % 10 >= 10 : +a % 10 < +b % 10);
+                    types.push(op + String(op==='+' ? +a%10 + +b%10>=10 : +a%10<+b%10));
+                    boundary ||= op==='-' && +a<20 && +b<10 && +a%10-+b===1;
+                    roundBorrow ||= op==='-' && +a%10===0 && +b>=11 && +b%10>0;
+                    assert.ok(+result>=0 && +result<=100);
                 }
-                if (index >= 6 && index < 8) assert.ok(!q.text.endsWith('= (   )'));
+                if (index >= 8 && index < 10) assert.ok(!q.text.endsWith('= (   )'));
                 assert.equal(q.answered, false);
-                if (index === 12) assert.match(q.text, /^\\(\\s*\\) × [1-9] = \\d+$/);
-                if (index === 13) assert.match(q.text, /^[1-9] × \\(\\s*\\) = \\d+$/);
-                if (index >= 14) {
+                if (index === 16 || index === 20) assert.match(q.text, /^\\(\\s*\\) × [1-9] = \\d+$/);
+                if (index === 17 || index === 21) assert.match(q.text, /^[1-9] × \\(\\s*\\) = \\d+$/);
+                if (index===18 || index===19) {
                     assert.equal(q.type, 'vertical');
                     assert.match(q.displayHtml, /vertical-calculation/);
                     assert.match(q.displayHtml, /grid-template-columns/);
                     assert.match(q.displayHtml, /vb-input-wide/);
                 }
             });
-            assert.equal(new Set(classroom.oral.slice(8).map(q => q.text)).size, 6);
+            assert.equal(new Set(types).size,4); assert.ok(boundary && roundBorrow);
+            assert.equal(new Set([...classroom.oral.slice(10),...classroom.closing].map(q=>q.text)).size,10);
         }
     `, ctx);
 });
 
-test('重开闯关按题集同步总数，答到第16题才结束', () => {
+test('重开闯关按题集同步总数，答到第22题才结束', () => {
     const ctx = context();
     vm.runInContext(`
         let challengeQuestions=[], totalQ=10, currentIndex=0, correctCount=0;
@@ -75,15 +80,15 @@ test('重开闯关按题集同步总数，答到第16题才结束', () => {
     vm.runInContext(between('    function submitAnswer()', '    async function showFinalResult'), ctx);
     vm.runInContext(`
         resetChallenge();
-        assert.equal(totalQ, 16);
-        for (currentIndex=0; currentIndex<16; currentIndex++) {
+        assert.equal(totalQ, 22);
+        for (currentIndex=0; currentIndex<22; currentIndex++) {
             nextQuestionTimer=null;
             const q=challengeQuestions[currentIndex];
             node.value=String(q.answer);
             node.querySelectorAll=()=>[node];
             submitAnswer();
-            assert.equal(completed, currentIndex===15 ? 1 : 0);
+            assert.equal(completed, currentIndex===21 ? 1 : 0);
         }
-        assert.equal(correctCount, 16);
+        assert.equal(correctCount, 22);
     `, ctx);
 });
