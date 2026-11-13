@@ -622,8 +622,6 @@ window.fetch = function(url, options) {
     <div id="oralGrid" class="question-grid"></div>
     <div class="section-title">二、竖式计算</div>
     <div id="verticalGrid" class="question-grid"></div>
-    <div class="section-title">三、填一填：缺少的乘数</div>
-    <div id="factorGrid" class="question-grid"></div>
 </div>
 
 <!-- 闯关逐题模式 -->
@@ -637,7 +635,7 @@ window.fetch = function(url, options) {
     </div>
     <button id="startGameBtn" class="start-game-btn" data-yiqi-action="answer">🎮 答题模式</button>
     <div class="current-card">
-        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共22题</div>
+        <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共20题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback"></div>
@@ -964,14 +962,14 @@ window.fetch = function(url, options) {
             const { a, b } = products.splice(index, 1)[0];
             oral.push({ text: `${a} × ${b} = (   )`, answer: a * b });
         }
-        const missingFactors = [true, false, true, false].map(missingFirst => {
+        const missingFactors = [true, false].map(missingFirst => {
             const index = Math.floor(currentRandom() * products.length);
             const { a, b } = products.splice(index, 1)[0];
             return missingFirst
                 ? { text: `(   ) × ${b} = ${a * b}`, answer: a }
                 : { text: `${a} × (   ) = ${a * b}`, answer: b };
         });
-        return { oral: [...oral.slice(0,8), ...removeTwoRandom(oral.slice(8,12)), ...oral.slice(12), ...missingFactors.slice(0,2)], vertical, closing:missingFactors.slice(2) };
+        return { oral: [...oral.slice(0,8), ...removeTwoRandom(oral.slice(8,12)), ...oral.slice(12), ...missingFactors], vertical };
     }
 
     const BLANK_HTML = '<span style="color:#ffffff;">???</span>';
@@ -993,22 +991,19 @@ window.fetch = function(url, options) {
     // 课堂练习渲染
     let currentDate = new Date();
     let currentOralData = [], currentVerticalData = [], showingAnswers = false;
-    let closingData=[];
     function formatDateMonthDay(d){ return `${d.getMonth()+1}月${d.getDate()}日`; }
     function renderClassroom() {
         const oralContainer = document.getElementById('oralGrid');
         const verticalContainer = document.getElementById('verticalGrid');
-        for(const [container,items,offset] of [[oralContainer,currentOralData,0],[document.getElementById('factorGrid'),closingData,currentOralData.length+currentVerticalData.length]]){
-            if(!container)continue;
-            container.innerHTML = '';
-            const nums = items.map((_, index) => offset+index<20?String.fromCodePoint(0x2460+offset+index):String.fromCodePoint(0x3251+offset+index-20));
-            items.forEach((item,i)=>{
+        if (oralContainer) {
+            oralContainer.innerHTML = '';
+            currentOralData.forEach((item,i)=>{
                 let txt = item.text;
                 if(showingAnswers) txt = txt.replace(/\([^)]*\)/, `<span class="answer-red">(${item.answer})</span>`);
                 else txt = txt.replace(/\([^)]*\)/, `(${BLANK_HTML})`);
                 const div = document.createElement('div'); div.className='question-item';
-                div.innerHTML = `<span class="q-num">${nums[i]}</span><div class="q-text">${txt}</div>`;
-                container.appendChild(div);
+                div.innerHTML = `<span class="q-num">${String.fromCodePoint(0x2460+i)}</span><div class="q-text">${txt}</div>`;
+                oralContainer.appendChild(div);
             });
         }
         if(verticalContainer){
@@ -1045,8 +1040,7 @@ window.fetch = function(url, options) {
         const seed = currentDate.getFullYear()*10000 + (currentDate.getMonth()+1)*100 + currentDate.getDate();
         const rng = createSeededRandom(seed);
         currentRandom = rng;
-        const {oral, vertical, closing} = buildExerciseSet();
-        closingData=closing;
+        const {oral, vertical} = buildExerciseSet();
         currentOralData = oral;
         currentVerticalData = vertical;
         showingAnswers = false;
@@ -1223,10 +1217,10 @@ window.fetch = function(url, options) {
     document.getElementById('exportBtn')?.addEventListener('click', showExportDialog);
     refreshClassroom();
 
-    // ========== 课后闯关模式（同步课堂练习，共16题） ==========
+    // ========== 课后闯关模式（同步课堂练习） ==========
     let challengeQuestions = [];
     let currentIndex = 0;
-    let totalQ = 22;
+    let totalQ = 20;
     let timer = null;
     let seconds = 0;
     let isContestMode = false;
@@ -1490,13 +1484,13 @@ window.fetch = function(url, options) {
         return { ...item, type: 'vertical', displayHtml: buildVerticalAnswerHTML(item, true), text: item.text };
     }
 
-    // 课堂与闯关共用12道口算、2道竖式的生成规则。
+    // 课堂与闯关共用18道口算、2道竖式的生成规则。
     function generateChallengeQuestions() {
         const oldRand = currentRandom;
         currentRandom = createSeededRandom(Date.now());
         try {
-            const { oral, vertical, closing } = buildExerciseSet();
-            return [...oral, ...vertical.map(generateVerticalChallenge), ...closing].map(q => ({ ...q, userAnswer: '', correct: false, answered: false }));
+            const { oral, vertical } = buildExerciseSet();
+            return [...oral, ...vertical.map(generateVerticalChallenge)].map(q => ({ ...q, userAnswer: '', correct: false, answered: false }));
         } finally { currentRandom = oldRand; }
     }
 

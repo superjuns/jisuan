@@ -14,7 +14,13 @@ function context() {
     return ctx;
 }
 
-test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', () => {
+test('课堂练习仅保留口算和竖式两部分', () => {
+    const markup = between('<div id="classroomPanel"', '<div id="challengePanel"');
+    assert.deepEqual(Array.from(markup.matchAll(/class="section-title">([^<]+)/g), m => m[1]), ['一、口算', '二、竖式计算']);
+    assert.doesNotMatch(markup, /id="factorGrid"/);
+});
+
+test('课堂与闯关共用20题：四类口算与两种易错题逐套覆盖', () => {
     const ctx = context();
     vm.runInContext(`
         for (let seed = 1; seed <= 200; seed++) {
@@ -22,10 +28,10 @@ test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', 
             currentRandom = createSeededRandom(seed);
             const classroom = buildExerciseSet();
             const questions = generateChallengeQuestions();
-            assert.equal(questions.length, 22);
+            assert.equal(questions.length, 20);
             assert.equal(classroom.oral.length, 18);
             assert.equal(classroom.vertical.length, 2);
-            assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical, ...classroom.closing].map(q => q.text));
+            assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical].map(q => q.text));
             const types=[]; let boundary=false, roundBorrow=false;
             questions.forEach((q, index) => {
                 const equation = q.text.replace(/\\(\\s*\\)/, String(q.answer));
@@ -33,7 +39,7 @@ test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', 
                 assert.ok(match, equation);
                 const [, a, op, b, result] = match;
                 assert.equal(op === '+' ? +a + +b : op === '×' ? +a * +b : +a - +b, +result);
-                if (index >= 10 && index < 18 || index >= 20) {
+                if (index >= 10 && index < 18) {
                     assert.equal(op, '×');
                     assert.ok(+a >= 1 && +a <= 9 && +b >= 1 && +b <= 9);
                 }
@@ -46,8 +52,8 @@ test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', 
                 }
                 if (index >= 8 && index < 10) assert.ok(!q.text.endsWith('= (   )'));
                 assert.equal(q.answered, false);
-                if (index === 16 || index === 20) assert.match(q.text, /^\\(\\s*\\) × [1-9] = \\d+$/);
-                if (index === 17 || index === 21) assert.match(q.text, /^[1-9] × \\(\\s*\\) = \\d+$/);
+                if (index === 16) assert.match(q.text, /^\\(\\s*\\) × [1-9] = \\d+$/);
+                if (index === 17) assert.match(q.text, /^[1-9] × \\(\\s*\\) = \\d+$/);
                 if (index===18 || index===19) {
                     assert.equal(q.type, 'vertical');
                     assert.match(q.displayHtml, /vertical-calculation/);
@@ -56,12 +62,12 @@ test('课堂与闯关共用22题：四类口算与两种易错题逐套覆盖', 
                 }
             });
             assert.equal(new Set(types).size,4); assert.ok(boundary && roundBorrow);
-            assert.equal(new Set([...classroom.oral.slice(10),...classroom.closing].map(q=>q.text)).size,10);
+            assert.equal(new Set(classroom.oral.slice(10).map(q=>q.text)).size,8);
         }
     `, ctx);
 });
 
-test('重开闯关按题集同步总数，答到第22题才结束', () => {
+test('重开闯关按题集同步总数，答到第20题才结束', () => {
     const ctx = context();
     vm.runInContext(`
         let challengeQuestions=[], totalQ=10, currentIndex=0, correctCount=0;
@@ -80,15 +86,15 @@ test('重开闯关按题集同步总数，答到第22题才结束', () => {
     vm.runInContext(between('    function submitAnswer()', '    async function showFinalResult'), ctx);
     vm.runInContext(`
         resetChallenge();
-        assert.equal(totalQ, 22);
-        for (currentIndex=0; currentIndex<22; currentIndex++) {
+        assert.equal(totalQ, 20);
+        for (currentIndex=0; currentIndex<20; currentIndex++) {
             nextQuestionTimer=null;
             const q=challengeQuestions[currentIndex];
             node.value=String(q.answer);
             node.querySelectorAll=()=>[node];
             submitAnswer();
-            assert.equal(completed, currentIndex===21 ? 1 : 0);
+            assert.equal(completed, currentIndex===19 ? 1 : 0);
         }
-        assert.equal(correctCount, 22);
+        assert.equal(correctCount, 20);
     `, ctx);
 });
