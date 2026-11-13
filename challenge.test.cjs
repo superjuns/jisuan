@@ -67,34 +67,42 @@ test('课堂与闯关共用20题：四类口算与两种易错题逐套覆盖', 
     `, ctx);
 });
 
-test('重开闯关按题集同步总数，答到第20题才结束', () => {
+test('登录后直接开始，第20题只提交完整的同一轮答案，不传客户端身份或分数', () => {
     const ctx = context();
     vm.runInContext(`
-        let challengeQuestions=[], totalQ=10, currentIndex=0, correctCount=0;
-        let yiqiAnswerStreak=0, wrongQuestions=[], nextQuestionTimer=null, timer=null, seconds=0;
-        let isContestMode=false, completed=0;
-        const node={style:{}, innerHTML:'', innerText:''};
-        const document={getElementById: id => id==='finalResultDisplay' ? null : node, querySelector: () => null};
+        let challengeQuestions=[],totalQ=20,currentIndex=0,correctCount=0,yiqiAnswerStreak=0,wrongQuestions=[],timer=null,seconds=0;
+        let phase='active',startedAt=null,roundToken='synthetic-test',pending=null,panelActive=true,completed=0;
+        const n={style:{},textContent:'',value:'',innerHTML:'',innerText:''};
+        const el=()=>n;
+        const card={hidden:false,classList:{remove(){},add(){}},querySelector:()=>null,appendChild(){}};
+        const document={getElementById:id=>id==='finalResultDisplay'?null:n,querySelector:()=>card,createElement:()=>({})};
+        n.querySelectorAll=()=>[n];
         function renderCurrentQuestion() {}
-        function initYiqiGameSdk() { return null; }
-        function triggerAnswerCelebration() {}
-        function showFinalResult() { completed++; }
-        function setTimeout() { return 1; }
-        function clearTimeout() {}
-    `, ctx);
-    vm.runInContext(between('    function resetChallenge()', '    function initFreePractice'), ctx);
-    vm.runInContext(between('    function submitAnswer()', '    async function showFinalResult'), ctx);
+        function startTimer(){startedAt=100;seconds=1;}
+        function stopTimer(){}
+        function triggerAnswerCelebration(){}
+        function emitGame(){}
+        function saveResult(){phase='saving';completed++;}
+    `,ctx);
+    vm.runInContext(between('    function resetChallenge(seed)', '    let activeInputElement'),ctx);
+    vm.runInContext(between('    function submitAnswer()', '    function showResultStatus'),ctx);
     vm.runInContext(`
-        resetChallenge();
-        assert.equal(totalQ, 20);
-        for (currentIndex=0; currentIndex<20; currentIndex++) {
-            nextQuestionTimer=null;
-            const q=challengeQuestions[currentIndex];
-            node.value=String(q.answer);
-            node.querySelectorAll=()=>[node];
+        resetChallenge(1001);
+        assert.equal(totalQ,20);
+        assert.equal(startedAt,null);
+        submitAnswer();
+        assert.equal(currentIndex,0);
+        assert.equal(startedAt,null);
+        for(let i=0;i<20;i++){
+            const q=challengeQuestions[i];n.value=String(q.answer);
             submitAnswer();
-            assert.equal(completed, currentIndex===19 ? 1 : 0);
+            assert.equal(completed,i===19?1:0);
         }
-        assert.equal(correctCount, 20);
-    `, ctx);
+        submitAnswer();assert.equal(completed,1);
+        assert.equal(pending.attempt,roundToken);
+        assert.equal(pending.answers.length,20);
+        assert.equal(pending.answers[0].userAnswer,String(challengeQuestions[0].answer));
+        assert.deepEqual(Object.keys(pending).sort(),['answers','attempt','elapsedSeconds']);
+        assert.equal(correctCount,20);
+    `,ctx);
 });
