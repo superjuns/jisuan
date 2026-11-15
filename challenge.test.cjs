@@ -20,10 +20,11 @@ test('课堂练习仅保留口算和竖式两部分', () => {
     assert.doesNotMatch(markup, /id="factorGrid"/);
 });
 
-test('课堂与闯关共用20题：四类口算与两种易错题逐套覆盖', () => {
+test('课堂与闯关共用20题：12道加减数距大于5且综合考查，8道乘法去重限1', () => {
     const ctx = context();
     vm.runInContext(`
-        for (let seed = 1; seed <= 200; seed++) {
+        const teenAnswers=new Set(), inverseBlanks=new Set(), verticalBorrowKinds=new Set();
+        for (let seed = 0; seed < 2000; seed++) {
             Date.now = () => seed;
             currentRandom = createSeededRandom(seed);
             const classroom = buildExerciseSet();
@@ -31,39 +32,68 @@ test('课堂与闯关共用20题：四类口算与两种易错题逐套覆盖', 
             assert.equal(questions.length, 20);
             assert.equal(classroom.oral.length, 18);
             assert.equal(classroom.vertical.length, 2);
-            assert.deepEqual(questions.map(q => q.text), [...classroom.oral, ...classroom.vertical].map(q => q.text));
-            const types=[]; let boundary=false, roundBorrow=false;
+            assert.deepEqual(questions.map(q => [q.text,q.answer]), [...classroom.oral, ...classroom.vertical].map(q => [q.text,q.answer]));
+            const types=[], inverseOps=[], addSubFacts=new Set(), unitSums=new Set(); let boundary=false, roundBorrow=false;
+            const facts=new Set(); let withOne=0;
             questions.forEach((q, index) => {
                 const equation = q.text.replace(/\\(\\s*\\)/, String(q.answer));
                 const match = equation.match(/^(\\d+) ([+×-]) (\\d+) = (\\d+)$/);
                 assert.ok(match, equation);
-                const [, a, op, b, result] = match;
-                assert.equal(op === '+' ? +a + +b : op === '×' ? +a * +b : +a - +b, +result);
+                const [, left, op, right, total] = match;
+                const a=Number(left), b=Number(right), result=Number(total), u=a%10, v=b%10;
+                assert.equal(op === '+' ? a+b : op === '×' ? a*b : a-b, result);
+                if(op!=='×'){
+                    assert.ok(Math.abs(a-b)>5,'两数过近 '+equation+'，seed='+seed);
+                    assert.ok(a>=0&&a<=100&&b>=0&&b<=100&&result>=0&&result<=100,equation);
+                    const key=op==='+'?[Math.min(a,b),op,Math.max(a,b)].join(''):[a,op,b].join('');
+                    assert.ok(!addSubFacts.has(key),'重复的加减算式 '+key+'，seed='+seed);
+                    addSubFacts.add(key);
+                }
                 if (index >= 10 && index < 18) {
                     assert.equal(op, '×');
-                    assert.ok(+a >= 1 && +a <= 9 && +b >= 1 && +b <= 9);
+                    assert.ok(a >= 1 && a <= 9 && b >= 1 && b <= 9);
+                    if(index < 16) assert.match(q.text,/^[1-9] × [1-9] = \\(\\s*\\)$/);
+                    const key=Math.min(a,b)+'×'+Math.max(a,b);
+                    assert.ok(!facts.has(key),'重复的乘法事实 '+key+'，seed='+seed);
+                    facts.add(key);
+                    if (a===1 || b===1 || result===1) withOne++;
                 }
                 if (index < 8) {
                     assert.match(q.text, /^\\d+ [+-] \\d+ =/);
-                    types.push(op + String(op==='+' ? +a%10 + +b%10>=10 : +a%10<+b%10));
-                    boundary ||= op==='-' && +a<20 && +b<10 && +a%10-+b===1;
-                    roundBorrow ||= op==='-' && +a%10===0 && +b>=11 && +b%10>0;
-                    assert.ok(+result>=0 && +result<=100);
+                    types.push(op + String(op==='+' ? u+v>=10 : u<v));
+                    if(op==='+') unitSums.add(u+v);
+                    if(op==='-' && a>10 && a<20 && b>0 && b<10 && u>=v && u-v<=2){
+                        boundary=true; teenAnswers.add(result);
+                    }
+                    roundBorrow ||= op==='-' && u===0 && b>=11 && v>0;
                 }
-                if (index >= 8 && index < 10) assert.ok(!q.text.endsWith('= (   )'));
+                if (index >= 8 && index < 10){
+                    assert.match(q.text,/^(?:\\(\\s*\\) [+-] \\d+|\\d+ [+-] \\(\\s*\\)) = \\d+$/);
+                    inverseOps.push(op);
+                    inverseBlanks.add(op+(q.text.startsWith('(')?'left':'right'));
+                }
                 assert.equal(q.answered, false);
                 if (index === 16) assert.match(q.text, /^\\(\\s*\\) × [1-9] = \\d+$/);
                 if (index === 17) assert.match(q.text, /^[1-9] × \\(\\s*\\) = \\d+$/);
                 if (index===18 || index===19) {
                     assert.equal(q.type, 'vertical');
+                    assert.equal(op,index===18?'+':'-');
+                    assert.ok(index===18?u+v>=10:u<v,'竖式需要进/退位 '+equation);
+                    if(index===19)verticalBorrowKinds.add(a===100?'hundreds':'tens');
                     assert.match(q.displayHtml, /vertical-calculation/);
-                    assert.match(q.displayHtml, /grid-template-columns/);
+                    assert.match(q.displayHtml, /vb-operand/);
+                    assert.match(q.displayHtml, /vb-answer-cell/);
                     assert.match(q.displayHtml, /vb-input-wide/);
                 }
             });
-            assert.equal(new Set(types).size,4); assert.ok(boundary && roundBorrow);
-            assert.equal(new Set(classroom.oral.slice(10).map(q=>q.text)).size,8);
+            assert.deepEqual(types.sort(),['+false','+false','+true','+true','-false','-false','-true','-true']);
+            assert.ok(unitSums.has(9) && unitSums.has(10)); assert.ok(boundary && roundBorrow);
+            assert.deepEqual(inverseOps.sort(),['+','-']); assert.equal(addSubFacts.size,12);
+            assert.equal(facts.size,8); assert.ok(withOne<=1,'多道乘法含1，seed='+seed);
         }
+        assert.deepEqual([...teenAnswers].sort(),[10,11,12],'十几减一位数的非退位题不能总得11');
+        assert.equal(inverseBlanks.size,4,'历轮应能交替考查加数、被减数、减数');
+        assert.equal(verticalBorrowKinds.size,2,'竖式既考查十位退位，又考查100跨零连续退位');
     `, ctx);
 });
 

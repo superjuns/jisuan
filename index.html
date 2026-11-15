@@ -518,7 +518,7 @@
         .daily-retry {margin-top:8px}
         .current-card { --daily-progress:7.14%; position:relative; min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); overflow:hidden; }
         .current-card.yiqi-answer-correct { animation:yiqi-daily-confirm 420ms cubic-bezier(.2,.8,.2,1); }
-        .current-card.yiqi-answer-wrong input { animation:yiqi-daily-shake 300ms ease-out; }
+        .current-card.yiqi-answer-wrong :is(.current-input,.vb-answer-layer) { animation:yiqi-daily-shake 300ms ease-out; }
         .yiqi-streak-chip { position:absolute; right:14px; top:14px; z-index:2; padding:6px 10px; border-radius:999px; background:#fff3df; color:#a85b00; font-size:.78rem; font-weight:800; animation:yiqi-chip-in 360ms cubic-bezier(.2,.8,.2,1); }
         @keyframes yiqi-daily-confirm { 0%{transform:scale(.985)} 55%{transform:scale(1.012);box-shadow:0 8px 24px rgba(0,122,255,.12)} 100%{transform:scale(1)} }
         @keyframes yiqi-daily-shake { 0%,100%{transform:translateX(0)} 30%{transform:translateX(-5px)} 65%{transform:translateX(4px)} }
@@ -538,6 +538,18 @@
         .vertical-blanks { background:var(--soft); }
         .vertical-line { border-color:var(--ink); }
         .vb-input,.vb-input-wide { border-color:#d2d2d7; background:white; }
+        /* The operands and answer use the same column centres; the operator has its own place. */
+        .vb-place-layout { --vb-place:max(44px,1.5em); --vb-gap:4px; display:inline-grid; grid-template-columns:repeat(var(--vb-cols),var(--vb-place)); column-gap:var(--vb-gap); font-variant-numeric:tabular-nums; }
+        .vb-operand,.vb-answer-layer { display:grid; grid-template-columns:repeat(var(--vb-cols),var(--vb-place)); column-gap:var(--vb-gap); grid-column:1/-1; text-align:center; }
+        .vb-rule { grid-column:1/-1; border-top:2px solid currentColor; margin:4px 0; }
+        .vb-answer-layer { position:relative; grid-column:-4/-1; grid-template-columns:repeat(3,var(--vb-place)); }
+        .vb-answer-cell { position:relative; display:grid; place-items:center; min-height:max(44px,1.6em); border:1px solid #c6c9d0; border-radius:9px; background:var(--soft); }
+        .vb-extra:empty { visibility:hidden; }
+        .vb-answer-layer .vb-input-wide { position:absolute; inset:0; width:100%; height:100%; opacity:0; font:inherit; cursor:text; }
+        .vb-answer-layer:focus-within .vb-answer-cell { border-color:var(--blue); }
+        .vb-answer-layer:focus-within .vb-selected { background:#d6eaff; }
+        .vb-answer-layer:focus-within [data-caret]::after { content:""; position:absolute; top:22%; height:56%; border-left:2px solid var(--blue); left:calc(50% + .4ch); }
+        .vb-answer-layer:focus-within [data-caret="before"]::after { left:calc(50% - .6ch); }
         .challenge-result { border-radius:16px; background:#f2f2f7; color:#1d1d1f; }
         .challenge-result:empty { display:none; }
         .wrong-questions { border-radius:18px; background:#fff1ef; }
@@ -577,7 +589,7 @@
             .numpad { gap:7px; }
             .numpad button { min-height:50px; }
         }
-        @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition:none!important; scroll-behavior:auto!important; } .current-card.yiqi-answer-wrong input { animation-duration:300ms!important; } }
+        @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition:none!important; scroll-behavior:auto!important; } .current-card.yiqi-answer-wrong :is(.current-input,.vb-answer-layer) { animation-duration:300ms!important; } }
         @media (prefers-reduced-transparency:reduce) { .yiqi-cheer { background:white; backdrop-filter:none; } }
     </style>
 </head>
@@ -628,6 +640,7 @@
     <div class="current-card">
         <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共20题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
+        <span id="dailyPadHelp" hidden>用下方数字键作答。答错后，按数字键可直接替换原答案。</span>
         <div id="currentQuestionDisplay" class="current-question"></div>
         <div id="currentFeedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
@@ -916,56 +929,102 @@
         return kept;
     }
 
-    // 直接加减各四题；每类两题，抽取后打乱，不能靠题号判断进退位。
-    function buildExerciseSet() {
-        const oral = [];
-        const pick = list => list[Math.floor(currentRandom() * list.length)];
-        for (const [op, accepts] of [
-            ['+', (u,v) => u+v===10], ['+', (u,v) => u+v>10],
-            ['+', (u,v) => u+v===9], ['+', (u,v) => u+v<9],
-            ['-', (u,v,a,b) => a%10===0 && b>=11 && v>0],
-            ['-', (u,v) => u>0 && u<v],
-            ['-', (u,v,a,b) => a<20 && b<10 && u-v===1],
-            ['-', (u,v,a,b) => b>=10 && u>=v && u-v<=1]
-        ]) {
-            const pool=[];
-            for(let a=11;a<100;a++) for(let b=1;b<a;b++){
-                const answer=op==='+'?a+b:a-b;
-                if(answer<=100 && accepts(a%10,b%10,a,b)) pool.push({text:`${a} ${op} ${b} = (   )`,answer});
+    // Reserve each arithmetic skill before drawing; the full operands (not just their units)
+    // differ by at least six, including questions where a number will later be hidden.
+    function buildSpacedAddSub(random) {
+        const used = new Set();
+        function draw(op, accepts) {
+            const pool = [];
+            for (let a=11; a<=100; a++) for (let b=1; b<=a-6; b++) {
+                if (op==='+' && a+b>100) continue;
+                if (accepts(a,b,a%10,b%10)) {
+                    const code = 101*a+b;
+                    if (!used.has(op==='+'?code:-code)) pool.push(code);
+                }
             }
-            oral.push(pick(pool));
+            if (!pool.length) throw Error('Empty arithmetic category');
+            const code = pool[Math.floor(random()*pool.length)];
+            used.add(op==='+'?code:-code);
+            let a=Math.floor(code/101), b=code%101;
+            if (op==='+' && b>=10 && random()<0.5) [a,b]=[b,a];
+            const result=op==='+'?a+b:a-b;
+            return {a,b,op,result};
         }
-        for(let i=oral.length-1;i>0;i--){const j=Math.floor(currentRandom()*(i+1));[oral[i],oral[j]]=[oral[j],oral[i]];}
-        const minuend = generateBorrowSubtraction100();
-        const subtrahend = generateBorrowSubtraction100();
-        const left = generateCarryAddition100(), right = generateCarryAddition100();
-        oral.push(
-            { text: `(   ) - ${minuend.b} = ${minuend.result}`, answer: minuend.a },
-            { text: `${subtrahend.a} - (   ) = ${subtrahend.result}`, answer: subtrahend.b },
-            { text: `(   ) + ${left.b} = ${left.sum}`, answer: left.a },
-            { text: `${right.a} + (   ) = ${right.sum}`, answer: right.b }
-        );
-        const sub = generateBorrowSubtraction100(true);
-        const vertical = [generateVerticalCarryAddition(), { ...sub, text: `${sub.a} - ${sub.b} = (   )`, answer: sub.result }];
-        const products = [];
+        const directQuestion = ({a,b,op,result}) => ({text:`${a} ${op} ${b} = (   )`,answer:result});
+        const fillQuestion = ({a,b,op,result},left) => left
+            ? {text:`(   ) ${op} ${b} = ${result}`,answer:a}
+            : {text:`${a} ${op} (   ) = ${result}`,answer:b};
+        const direct = [
+            draw('+',(a,b,u,v)=>u+v===10),
+            draw('+',(a,b,u,v)=>b>=11 && u+v>10),
+            draw('+',(a,b,u,v)=>b<10 && u+v===9),
+            draw('+',(a,b,u,v)=>u+v<9),
+            draw('-',(a,b,u,v)=>a<100 && u===0 && b>=11 && v>0),
+            draw('-',(a,b,u,v)=>u>0 && u<v),
+            draw('-',(a,b,u,v)=>a<20 && b<10 && u>=v && u-v<=2),
+            draw('-',(a,b,u,v)=>b>=11 && u>=v && u-v<=1)
+        ].map(directQuestion);
+        for(let i=direct.length-1;i>0;i--){
+            const j=Math.floor(random()*(i+1));[direct[i],direct[j]]=[direct[j],direct[i]];
+        }
+        const carry=random()<0.5, borrow=random()<0.5, left=random()<0.5;
+        const missing = [
+            fillQuestion(draw('+',(a,b,u,v)=>b>=11 && (u+v>=10)===carry),left),
+            fillQuestion(draw('-',(a,b,u,v)=>a<100 && b>=11 && (u<v)===borrow),!left)
+        ];
+        if(random()<0.5)missing.reverse();
+        const add=draw('+',(a,b,u,v)=>b>=11 && a+b<100 && u+v>=10);
+        const acrossZero=random()<0.35;
+        const sub=draw('-',(a,b,u,v)=>(acrossZero?a===100:a<100) && b>=11 && u<v);
+        const vertical=[{...add,...directQuestion(add),carry:1},{...sub,...directQuestion(sub),borrow:true}];
+        return {direct,missing,vertical};
+    }
+
+    function buildExerciseSet() {
+        const {direct,missing,vertical}=buildSpacedAddSub(currentRandom);
+        const oral=[...direct,...missing];
+        let products = [];
         for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) products.push({ a, b });
-        for (let i = 0; i < 6; i++) {
+        // All eight multiplication questions share one pool, including the two missing factors.
+        function drawFact() {
             const index = Math.floor(currentRandom() * products.length);
-            const { a, b } = products.splice(index, 1)[0];
+            const [fact] = products.splice(index, 1);
+            const hasOne = fact.a === 1 || fact.b === 1;
+            products = products.filter(({ a, b }) =>
+                !(a === fact.b && b === fact.a) && !(hasOne && (a === 1 || b === 1)));
+            return fact;
+        }
+        for (let i = 0; i < 6; i++) {
+            const { a, b } = drawFact();
             oral.push({ text: `${a} × ${b} = (   )`, answer: a * b });
         }
         const missingFactors = [true, false].map(missingFirst => {
-            const index = Math.floor(currentRandom() * products.length);
-            const { a, b } = products.splice(index, 1)[0];
+            const { a, b } = drawFact();
             return missingFirst
                 ? { text: `(   ) × ${b} = ${a * b}`, answer: a }
                 : { text: `${a} × (   ) = ${a * b}`, answer: b };
         });
-        return { oral: [...oral.slice(0,8), ...removeTwoRandom(oral.slice(8,12)), ...oral.slice(12), ...missingFactors], vertical };
+        return { oral: [...oral,...missingFactors], vertical };
     }
 
     const BLANK_HTML = '<span style="color:#ffffff;">???</span>';
+    function verticalQuestionHTML(item) {
+        const places=Math.max(2,String(item.a).length,String(item.b).length);
+        const operand=(number,sign='')=>{
+            const digits=String(number).padStart(places,' ').split('');
+            return '<div class="vb-operand"><span>'+sign+'</span>'+digits.map((digit,i)=>
+                '<span data-place="'+(places-1-i)+'">'+digit.trim()+'</span>').join('')+'</div>';
+        };
+        // A two-column problem does not show an unnecessary hundreds box. The same
+        // reserved space can still display a three-digit attempt without moving the operands.
+        const cells=[2,1,0].map(place=>'<span aria-hidden="true" class="vb-answer-cell'+
+            (place>=places?' vb-extra':'')+'" data-place="'+place+'"></span>').join('');
+        return '<div class="vertical-calculation vb-place-layout" style="--vb-cols:'+(places+1)+'">'+
+            operand(item.a)+operand(item.b,item.op)+'<div class="vb-rule"></div><div class="vb-answer-layer">'+cells+
+            '<input type="text" inputmode="numeric" maxlength="3" autocomplete="off" class="vb-input-wide" aria-label="竖式计算结果"></div></div>';
+    }
     function buildVerticalAnswerHTML(item, blankResult = false) {
+        if(blankResult)return verticalQuestionHTML(item);
         const columns = item.a === 100 ? 3 : 2;
         const row = (number, operator = '') => {
             const digits = String(number).padStart(columns, ' ').split('');
@@ -974,9 +1033,9 @@
         const borrow = item.op === '-';
         // 退位点标在被减数借出一份的数位上方；100连续退位，百位、十位各一点。
         const marks = columns === 3 ? ['百位退位点', '十位退位点', ''] : ['十位退位点', ''];
-        const note = borrow && !blankResult ? '<div class="vertical-borrow-row" style="display:grid;grid-template-columns:28px repeat(' + columns + ',32px);gap:4px;text-align:right;color:#d32f2f;height:12px;line-height:12px;margin-bottom:2px"><span></span>' + marks.map(label => '<span>' + (label ? '<span class="vertical-borrow-dot" role="img" aria-label="' + label + '" style="display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:4px"></span>' : '') + '</span>').join('') + '</div>' : '';
-        const carry = item.carry && !blankResult ? '<div class="vertical-carry-row"><span style="width:28px"></span><span class="vertical-carry-one has-carry" aria-label="满十进1">1</span><span class="vertical-carry-one"></span></div>' : '';
-        const result = blankResult ? '<div class="vb-row"><span class="vb-op"></span><input type="text" inputmode="numeric" class="vb-input-wide" placeholder="?" maxlength="3" aria-label="计算结果"></div>' : row(item.result);
+        const note = borrow ? '<div class="vertical-borrow-row" style="display:grid;grid-template-columns:28px repeat(' + columns + ',32px);gap:4px;text-align:right;color:#d32f2f;height:12px;line-height:12px;margin-bottom:2px"><span></span>' + marks.map(label => '<span>' + (label ? '<span class="vertical-borrow-dot" role="img" aria-label="' + label + '" style="display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:4px"></span>' : '') + '</span>').join('') + '</div>' : '';
+        const carry = item.carry ? '<div class="vertical-carry-row"><span style="width:28px"></span><span class="vertical-carry-one has-carry" aria-label="满十进1">1</span><span class="vertical-carry-one"></span></div>' : '';
+        const result = row(item.result);
         return '<div class="vertical-calculation" style="display:inline-block;font-variant-numeric:tabular-nums">' + note + row(item.a) + row(item.b, item.op) + carry + '<div style="border-top:2px solid currentColor;margin:4px 0"></div>' + result + '</div>';
     }
 
@@ -1274,9 +1333,9 @@
         const version=identityCheck;
         showIdentity('正在确认答题身份…');
         try {
-            const data=await api('?mode=correction');
+            const data=await api('?mode=correction&worksheet=3');
             if(version!==identityCheck||!panelActive)return;
-            if(data.mode!=='correction'||!data.student?.name||!data.student?.class||!data.attempt||!data.quotaKey||!Number.isInteger(data.seed))throw Error('Invalid round');
+            if(data.worksheet!==3||data.mode!=='correction'||!data.student?.name||!data.student?.class||!data.attempt||!data.quotaKey||!Number.isInteger(data.seed))throw Error('Invalid round');
             currentStudent=data.student;roundToken=data.attempt;quotaKey=data.quotaKey;
             phase='active';resetChallenge(data.seed);activeIdentity();
             el('dailyRoundUI').hidden=false;el('resetChallengeBtn').disabled=false;
@@ -1485,7 +1544,9 @@
         const userVal=parts.join('');
         if(invalid!==-1||!/^\d{1,3}$/.test(userVal)){
             setFeedback(parts.length>1?'请把每一个数位填完整。':'请输入一个数再提交。','retry');
-            inputs[invalid]?.focus();return;
+            const target=inputs[invalid];
+            if(target && target.inputMode!=='none')target.focus();
+            return;
         }
         if(startedAt===null)startTimer();
         if(phase!=='active')return;
@@ -1502,8 +1563,10 @@
                 if(answerCard){void answerCard.offsetWidth;answerCard.classList.add('yiqi-answer-wrong');}
                 try {navigator.vibrate?.(45);} catch {}
             }
-            setFeedback(correctionHint(q.text,q.wrongTries),'retry');
-            inputs[0].focus();inputs[0].select();
+            const pageKeypad=inputs[0].inputMode==='none';
+            setFeedback(pageKeypad && first?'还差一点，直接按下方数字键改一改。':correctionHint(q.text,q.wrongTries),'retry');
+            // On touch the page keypad owns editing; do not invoke native text selection.
+            if(!pageKeypad){inputs[0].focus();inputs[0].select();}
             return;
         }
         q.finalAnswer=userVal;q.answered=true;
@@ -1599,6 +1662,14 @@
             let textWithInput = q.text.replace(/\([^)]*\)/, '<input type="text" inputmode="numeric" maxlength="3" aria-label="答案" class="current-input" id="inlineInput" style="width:100px; margin:0 8px;" placeholder="?" autocomplete="off">');
             questionDisplayDiv.innerHTML = textWithInput;
         }
+        if(window.matchMedia('(pointer: coarse)').matches){
+            for(const input of questionDisplayDiv.querySelectorAll('input')){
+                // Use readonly as well as inputmode: focusing the answer must never summon a second keypad.
+                input.readOnly=true;
+                input.inputMode='none';
+                input.setAttribute('aria-describedby','dailyPadHelp');
+            }
+        }
     }
 
     function resetChallenge(seed) {
@@ -1624,6 +1695,41 @@
     }
 
     let activeInputElement = null;
+    // Keep a single native input for typing, selection, paste and scoring. The visible
+    // boxes only mirror its value, anchored at the units column even while editing.
+    function paintVerticalInput(input){
+        if(!input?.classList.contains('vb-input-wide'))return;
+        const value=input.value, start=input.selectionStart, end=input.selectionEnd;
+        for(const cell of input.parentElement.querySelectorAll('.vb-answer-cell')){
+            const place=Number(cell.dataset.place), i=value.length-1-place;
+            const digit=value[i]||'';
+            if(cell.textContent!==digit)cell.textContent=digit;
+            cell.classList.toggle('vb-selected',i>=0 && i>=start && i<end);
+            if(input.inputMode!=='none' && !input.readOnly && start===end && ((i>=0 && i===start)||(place===0 && start===value.length))){
+                cell.dataset.caret=i===start?'before':'after';
+            }else if(cell.hasAttribute('data-caret'))delete cell.dataset.caret;
+        }
+    }
+    function applyAnswerKey(input, digit) {
+        const q=challengeQuestions[currentIndex];
+        if(!panelActive||phase!=='active'||!q||q.answered)return;
+        const max=input.maxLength>0?input.maxLength:3;
+        if(input.inputMode==='none'){
+            // No native selection on touch. The first digit or delete explicitly replaces the rejected answer.
+            const previous=q.needsEdit?'':input.value;
+            const next=digit===null?previous.slice(0,-1):previous+digit;
+            if(next.length>max || (!q.needsEdit && next===input.value))return;
+            input.value=next;
+        }else{
+            let start=input.selectionStart??input.value.length;
+            const end=input.selectionEnd??start;
+            if(digit===null&&start===end)start=Math.max(0,start-1);
+            const replacement=digit??'';
+            if(input.value.length-(end-start)+replacement.length>max)return;
+            input.setRangeText(replacement,start,end,'end');
+        }
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+    }
     function setActiveInput() { 
         const q = challengeQuestions[currentIndex]; 
         if (q && q.type === 'vertical') { 
@@ -1656,14 +1762,7 @@
                 if (!activeInputElement) return; 
             } 
             if (digit!==null||action==='del') {
-                const input=activeInputElement;
-                let start=input.selectionStart??input.value.length;
-                const end=input.selectionEnd??start;
-                const replacement=digit??'';
-                if(action==='del'&&start===end)start=Math.max(0,start-1);
-                if(input.value.length-(end-start)+replacement.length>(input.maxLength>0?input.maxLength:3))return;
-                input.setRangeText(replacement,start,end,'end');
-                input.dispatchEvent(new Event('input',{bubbles:true}));
+                applyAnswerKey(activeInputElement,digit);
             } else if (action === 'submit') { 
                 submitAnswer(); 
             } 
@@ -1686,15 +1785,33 @@
         classPanel.style.display='none';challengePanel.classList.add('active');void beginRound();
     });
     el('resetChallengeBtn').addEventListener('click',()=>{if(canLeaveRound())void beginRound();});
+    const answerDisplay=el('currentQuestionDisplay');
+    answerDisplay.addEventListener('focusin',event=>paintVerticalInput(event.target));
+    document.addEventListener('selectionchange',()=>paintVerticalInput(document.activeElement));
+    answerDisplay.addEventListener('click',event=>{
+        const input=event.target;
+        if(!input.matches('.vb-input-wide')||input.readOnly||event.detail!==1||input.selectionStart!==input.selectionEnd)return;
+        // A click on the painted digits must place the desktop caret at the same position.
+        const cells=[...input.parentElement.querySelectorAll('.vb-answer-cell')].filter(cell=>cell.textContent);
+        const next=cells.findIndex(cell=>{const r=cell.getBoundingClientRect();return event.clientX<r.left+r.width/2;});
+        const caret=next<0?input.value.length:next;
+        input.setSelectionRange(caret,caret);paintVerticalInput(input);
+    });
     el('currentQuestionDisplay').addEventListener('input',event=>{
         const q=challengeQuestions[currentIndex];
         if(panelActive&&phase==='active'&&q&&!q.answered){
+            paintVerticalInput(event.target);
             q.needsEdit=false;
             if(/\d/.test(event.target.value))startTimer();
         }
     });
     el('currentQuestionDisplay').addEventListener('keydown',event=>{
-        if(event.key==='Enter'&&!event.repeat){event.preventDefault();submitAnswer();}
+        if(event.isComposing||event.ctrlKey||event.altKey||event.metaKey)return;
+        if(event.key==='Enter'&&!event.repeat){event.preventDefault();submitAnswer();return;}
+        // Tablets with a physical keyboard can still enter digits into the touch answer display.
+        if(event.target.inputMode==='none' && (/^\d$/.test(event.key)||event.key==='Backspace'||event.key==='Delete')){
+            event.preventDefault();applyAnswerKey(event.target,event.key.length===1?event.key:null);
+        }
     });
     window.addEventListener('message',event=>{
         if(window.parent===window||event.source!==window.parent||event.origin!==location.origin||!panelActive)return;

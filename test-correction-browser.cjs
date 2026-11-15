@@ -11,7 +11,6 @@ const { createHash } = require('node:crypto');
 const fixtureOrigin = 'https://daily-practice-fixture.invalid';
 const gamePath = '/api/game-preview/daily-practice';
 const apiPath = '/api/daily-practice';
-const seed = 4; // final question: 100 − 54; exercises borrowing across zero
 const isProduction = process.argv.includes('--production');
 function getPlaywright() {
     for (const name of [process.env.PLAYWRIGHT_MODULE, 'playwright', path.resolve(path.dirname(process.execPath), '../node_modules/playwright')].filter(Boolean)) {
@@ -45,20 +44,67 @@ async function displayedEquation(page) {
     return page.locator('#currentQuestionDisplay').evaluate(el => {
         const vertical = el.querySelector('.vertical-calculation');
         if (vertical) {
-            const rows = [...vertical.children].filter(row => row.style.display === 'grid');
-            return rows.slice(0,2).map(row => row.textContent.replace(/\s+/g, '')).join('') + '=?';
+            return [...vertical.querySelectorAll('.vb-operand')].map(row => row.textContent.replace(/\s+/g, '')).join('') + '=?';
         }
         const clone = el.cloneNode(true);
         clone.querySelector('input').replaceWith('?');
         return clone.textContent;
     });
 }
-async function verify(html, browser, viewport, full) {
-    const context = await browser.newContext({viewport, serviceWorkers: 'block', hasTouch: viewport.width <= 768});
+async function verifyPlaces(page, value, container='#currentQuestionDisplay') {
+    const {digits, slots, editor} = await page.locator(container+' .vertical-calculation').evaluate(el=>{
+        const center = rect => rect.x+rect.width/2;
+        const glyphCenter = node => {
+            const range = document.createRange(); range.selectNodeContents(node);
+            return center(range.getBoundingClientRect());
+        };
+        const digits = [...el.querySelectorAll('.vb-operand [data-place]')].filter(n=>/^\d$/.test(n.textContent.trim()))
+            .map(n=>({place:Number(n.dataset.place),x:glyphCenter(n)}));
+        const slots = [...el.querySelectorAll('.vb-answer-cell[data-place]')].filter(n=>
+            n.getBoundingClientRect().width>0 && getComputedStyle(n).visibility!=='hidden')
+            .map(n=>({place:Number(n.dataset.place), digit:n.textContent.trim(), x:center(n.getBoundingClientRect()), glyphX:glyphCenter(n)}));
+        return {digits,slots,editor:el.querySelector('.vb-input-wide').value};
+    });
+    assert.equal(editor,value);
+    const unit=digits.find(d=>d.place===0)?.x, ten=digits.find(d=>d.place===1)?.x;
+    assert.ok(unit>ten,'missing operand digits for tens/units');
+    const at = place=>unit-place*(unit-ten);
+    for(const d of digits) assert.ok(Math.abs(d.x-at(d.place))<=1,'operands disagree at place '+d.place);
+    const expectedPlaces=new Set([...digits.map(d=>d.place),...Array.from(value,(_,i)=>i)]);
+    assert.deepEqual(slots.map(s=>s.place).sort(),[...expectedPlaces].sort(),'missing place or unexpected empty leading box');
+    for(const s of slots) {
+        const target=at(s.place);
+        assert.ok(Math.abs(s.x-target)<=1,`answer box at place ${s.place} centered on ${s.x} instead of ${target}`);
+        assert.equal(s.digit.match(/\d/g)?.join('')||'',value.at(-1-s.place)||'','wrong digit in place '+s.place);
+        if(/^\d$/.test(s.digit)) assert.ok(Math.abs(s.glyphX-target)<=1,`answer digit at place ${s.place} centered on ${s.glyphX} instead of ${target}`);
+    }
+}
+async function verifyExampleLayout(page) {
+    // Fixed visual examples exercise both column widths even as worksheet sampling changes.
+    // Separate fixture DOM: never mutate the active question, interaction state or receipt.
+    const container='#qa-place-fixture';
+    await page.evaluate(()=>{
+        const fixture=document.createElement('div');
+        fixture.id='qa-place-fixture';fixture.className='current-question';
+        document.body.appendChild(fixture);
+    });
+    try{
+        for(const example of [{a:59,b:27,op:'+',result:86},{a:100,b:64,op:'-',result:36}]){
+            await page.locator(container).evaluate((el,item)=>{el.innerHTML=buildVerticalAnswerHTML(item,true);},example);
+            for(const value of ['', '9', String(example.result), '999', '']){
+                await page.locator(container+' input').evaluate((input,text)=>{input.value=text;paintVerticalInput(input);},value);
+                await verifyPlaces(page,value,container);
+            }
+        }
+    }finally{await page.locator(container).evaluate(el=>el.remove());}
+}
+async function verify(html, browser, viewport) {
+    const touch = viewport.width <= 768;
+    const context = await browser.newContext({viewport, serviceWorkers: 'block', hasTouch: touch});
     context.setDefaultTimeout(4500);
     const sends = [], receipts = new Map(), errors = [], unexpected = [];
     const token = 'synthetic-local-round';
-    let begins = 0, failOnce = full;
+    let begins = 0, failOnce = true;
     await context.routeWebSocket('**/*', ws => { unexpected.push('WebSocket'); ws.close(); });
     await context.route('**/*', async route => {
         const req = route.request(), url = new URL(req.url());
@@ -67,9 +113,9 @@ async function verify(html, browser, viewport, full) {
             return route.fulfill({contentType:'text/html; charset=utf-8', body: html});
         if (url.origin===fixtureOrigin && url.pathname===apiPath) {
             if (req.method()==='GET' && url.searchParams.get('view')==='leaderboard') return ok({rows:[]});
-            if (req.method()==='GET' && url.searchParams.get('mode')==='correction') {
+            if (req.method()==='GET' && url.searchParams.get('mode')==='correction' && url.searchParams.get('worksheet')==='3') {
                 begins++;
-                return ok({student:{class:'模拟班',name:'虚构测试'}, attempt: token+begins, quotaKey: 'fake-key', seed, mode:'correction'});
+                return ok({student:{class:'模拟班',name:'虚构测试'}, attempt: token+begins, quotaKey: 'fake-key', seed:viewport.width+begins, mode:'correction', worksheet:3});
             }
             if (req.method()==='POST') {
                 const post = req.postDataJSON();
@@ -111,6 +157,10 @@ async function verify(html, browser, viewport, full) {
         }
         window.qaShakes=0;
         window.qaHaptics=[];
+        window.qaNativeEditorFocus=0;
+        document.addEventListener('focusin', ({target})=>{
+            if(target.matches('#currentQuestionDisplay input') && !target.readOnly && target.inputMode!=='none')window.qaNativeEditorFocus++;
+        });
         Object.defineProperty(navigator,'vibrate',{configurable:true,value:ms=>{window.qaHaptics.push(ms);return true;}});
         addEventListener('animationstart', e=>{if(e.animationName==='yiqi-daily-shake')window.qaShakes++;});
     });
@@ -124,6 +174,21 @@ async function verify(html, browser, viewport, full) {
         const waitNum = n => num.filter({hasText:new RegExp('第\\s*'+n+'\\s*题')}).waitFor({state:'visible'});
         const assertNum = async n => assert.match(await num.innerText(), new RegExp('第\\s*'+n+'\\s*题'));
         const clickTwice = loc => loc.evaluate(el => { el.click(); el.click(); });
+        const activate = loc => touch ? loc.tap() : loc.click();
+        const digits = async value => {
+            for (const ch of String(value)) await activate(page.locator('#numpad [data-digit="'+ch+'"]'));
+        };
+        const del = () => activate(page.locator('#numpad [data-action="del"]'));
+        const write = async value => {
+            if(touch) await digits(value); else await input.fill(String(value));
+            assert.equal(await input.inputValue(),String(value),'first digit must replace a pending correction');
+        };
+        const verifyTouchInput = async () => {
+            // Headless browsers cannot expose iOS keyboard chrome. A read-only
+            // field plus inputmode=none must already be in effect before a tap.
+            assert.deepEqual(await input.evaluate(i=>[i.readOnly,i.inputMode]),[true,'none']);
+            assert.equal(await page.evaluate(()=>window.qaNativeEditorFocus),0,'focused a keyboard-capable answer field');
+        };
         const answer = async () => solve(await displayedEquation(page));
         const noSaves = () => assert.equal(sends.length,0,'unfinished work sent a result');
         const checkLayout = async () => {
@@ -135,27 +200,38 @@ async function verify(html, browser, viewport, full) {
             }
         };
         await waitNum(1); await checkLayout();
-        await input.fill('999'); await clickTwice(submit);
+        await verifyExampleLayout(page);
+        assert.equal(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches),touch);
+        if(touch) {
+            await verifyTouchInput(); await input.tap();
+            await activate(submit); await assertNum(1); await verifyTouchInput();
+            assert.match(await feedback.innerText(),/输入/);
+        }
+        await write('999'); await activate(submit); await activate(submit);
         await page.waitForFunction(()=>window.qaShakes>=1);
         const t1=await feedback.innerText();
         assert.match(t1,/改一改|再试/); await assertNum(1);
-        assert.deepEqual(await input.evaluate(i=>[i.value, i.selectionStart,i.selectionEnd, i===document.activeElement]),['999',0,3,true]);
+        assert.equal(await input.inputValue(),'999','keep the original answer visible until editing');
+        if(touch) await verifyTouchInput();
+        else assert.deepEqual(await input.evaluate(i=>[i.selectionStart,i.selectionEnd, i===document.activeElement]),[0,3,true]);
         await delay(350); assert.equal(await page.evaluate(()=>window.qaShakes),1,'repeated click replayed shake');
         assert.equal(await page.evaluate(()=>window.qaHaptics.length),1,'repeated click replayed haptic');
-        // The onscreen keypad must replace the selected wrong answer, not append.
-        await page.locator('#numpad [data-digit="9"]').click(); assert.equal(await input.inputValue(),'9');
-        await input.fill('998'); await submit.click();
+        // Page keypad works without an editable native text selection on a phone.
+        await digits('9'); assert.equal(await input.inputValue(),'9');
+        await digits('0'); await del(); assert.equal(await input.inputValue(),'9');
+        await digits('98'); assert.equal(await input.inputValue(),'998'); await activate(submit);
         const t2=await feedback.innerText(); assert.notEqual(t1,t2,'second error needs a targeted hint'); await assertNum(1);
-        await input.fill('997'); await submit.click();
+        await del(); assert.equal(await input.inputValue(),'','first delete after a wrong answer clears it');
+        await write('997'); await activate(submit);
         const t3=await feedback.innerText(); assert.notEqual(t2,t3,'third error needs step guidance'); assert.match(t3,/①[\s\S]*②/); await assertNum(1);
         await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
         assert.deepEqual(await page.evaluate(()=>[window.qaShakes,window.qaHaptics.length]),[1,1],
             'only the first actual mistake on this question should shake/vibrate');
         await checkLayout(); noSaves();
-        if (!full) return {viewport,checks:'retry levels and keypad selection',rounds:begins};
+        if(touch) await verifyTouchInput();
         // Mode switch during a scheduled correct answer must cancel that old callback.
         const first=await answer();
-        await input.fill(String(first));
+        await write(first);
         await page.evaluate(()=>{
             document.querySelector('#numpad [data-action=submit]').click();
             document.querySelector('#classModeBtn').click();
@@ -166,19 +242,42 @@ async function verify(html, browser, viewport, full) {
         await delay(800); await assertNum(1); noSaves();
         for(let i=1;i<=20;i++){
             await waitNum(i); const correct=await answer();
+            if(touch) await verifyTouchInput();
+            if(i>=19) await verifyPlaces(page,'');
             if ([1,19,20].includes(i)){
-                await input.fill('999'); await submit.click(); await assertNum(i);
+                if(!touch && i===1){
+                    await input.click(); await page.keyboard.type('999'); await page.keyboard.press('Enter');
+                }else{
+                    await write('999'); await activate(submit);
+                }
+                await assertNum(i);
                 if(i>=19) {
                     assert.equal(await page.locator('#currentQuestionDisplay .vertical-calculation').count(),1);
-                    if(i===20) assert.equal((await displayedEquation(page)).replace(/\s+/g,''),'100-54=?');
-                    await input.fill('998'); await submit.click(); const hint=await feedback.innerText();
-                    await input.fill('997'); await submit.click(); const steps=await feedback.innerText();
-                    assert.notEqual(hint,steps); assert.match(steps,i===19 ? /进|满十/ : /换|退|借/);
-                    if(i===20) assert.match(steps,/百/,'borrowing across zero must mention the hundreds place');
+                    // The wrong-answer shake is transient; measure the settled positions.
+                    await delay(350); await verifyPlaces(page,'999');
+                    if(touch) { await input.tap(); await verifyTouchInput(); }
+                    await write('998'); await activate(submit); const hint=await feedback.innerText();
+                    await del(); await verifyPlaces(page,'');
+                    await digits('9'); await verifyPlaces(page,'9');
+                    await digits('0'); await verifyPlaces(page,'90'); await del(); await verifyPlaces(page,'9');
+                    await del(); await verifyPlaces(page,'');
+                    await write('997'); await activate(submit); const steps=await feedback.innerText();
+                    assert.notEqual(hint,steps); assert.match(steps,/①[\s\S]*②/);
+                    if(/^100[-−]/.test((await displayedEquation(page)).replace(/\s+/g,''))) assert.match(steps,/百/,'borrowing across zero must mention the hundreds place');
                     await checkLayout(); await assertNum(i); noSaves();
                 }
             }
-            await input.fill(String(correct)); await clickTwice(submit);
+            if(!touch && i===1){
+                // A hardware keyboard must still replace, backspace, and submit via Enter.
+                await page.keyboard.type('0'); assert.equal(await input.inputValue(),'0');
+                await page.keyboard.press('Backspace'); assert.equal(await input.inputValue(),'');
+                await page.keyboard.type(String(correct)); await page.keyboard.press('Enter');
+            }else{
+                await write(correct);
+                if(i>=19) await verifyPlaces(page,String(correct));
+                if ([1,19,20].includes(i)) { await activate(submit); await clickTwice(submit); }
+                else await activate(submit);
+            }
             if ([1,19,20].includes(i)) assert.match(await feedback.innerText(),/改对了/);
         }
         const status=page.locator('#challengeResultMsg'), retry=status.getByRole('button',{name:'重试保存'});
@@ -192,7 +291,8 @@ async function verify(html, browser, viewport, full) {
         const events=await page.evaluate(()=>window.qaEvents);
         assert.equal(events.filter(e=>e.type==='score-submitted').length,1);
         assert.deepEqual(events.filter(e=>e.type==='mistakes-recorded').map(e=>e.detail.count),[3]);
-        return {viewport,checks:'full correction, switch isolation, 17/20 and 3 corrected, lost-response retry',rounds:begins,syntheticPosts:sends.length};
+        if(touch) assert.equal(await page.evaluate(()=>window.qaNativeEditorFocus),0);
+        return {viewport,checks:'vertical place alignment while typing/deleting/correcting; full round, 17/20 and 3 corrected, lost-response retry',rounds:begins,syntheticPosts:sends.length};
     } finally {
         await context.close();
         assert.deepEqual([...errors,...unexpected], [],'uncaught error / invalid or unexpected request');
@@ -204,7 +304,7 @@ async function verify(html, browser, viewport, full) {
     const executablePath=process.env.CHROME_PATH || (!fs.existsSync(chromium.executablePath()) && fs.existsSync(systemChrome) ? systemChrome : undefined);
     const browser=await chromium.launch({headless:true,executablePath});
     try {
-        const results=await Promise.all([[390,844,true],[1280,844,true],[320,700,false],[768,1024,false]].map(([width,height,full])=>verify(html,browser,{width,height},full)));
+        const results=await Promise.all([[390,844],[1280,844],[320,700],[768,1024]].map(([width,height])=>verify(html,browser,{width,height})));
         console.log(JSON.stringify({source:isProduction?'production-static':'local',sha256:createHash('sha256').update(html).digest('hex'),results},null,2));
     } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});
