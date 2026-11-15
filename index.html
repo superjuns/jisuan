@@ -518,7 +518,7 @@
         .daily-retry {margin-top:8px}
         .current-card { --daily-progress:7.14%; position:relative; min-height:190px; margin-bottom:12px; padding:18px 14px; border:0; border-radius:22px; background:#fff; box-shadow:0 3px 16px rgba(0,0,0,.055); overflow:hidden; }
         .current-card.yiqi-answer-correct { animation:yiqi-daily-confirm 420ms cubic-bezier(.2,.8,.2,1); }
-        .current-card.yiqi-answer-wrong { animation:yiqi-daily-shake 300ms ease-out; }
+        .current-card.yiqi-answer-wrong input { animation:yiqi-daily-shake 300ms ease-out; }
         .yiqi-streak-chip { position:absolute; right:14px; top:14px; z-index:2; padding:6px 10px; border-radius:999px; background:#fff3df; color:#a85b00; font-size:.78rem; font-weight:800; animation:yiqi-chip-in 360ms cubic-bezier(.2,.8,.2,1); }
         @keyframes yiqi-daily-confirm { 0%{transform:scale(.985)} 55%{transform:scale(1.012);box-shadow:0 8px 24px rgba(0,122,255,.12)} 100%{transform:scale(1)} }
         @keyframes yiqi-daily-shake { 0%,100%{transform:translateX(0)} 30%{transform:translateX(-5px)} 65%{transform:translateX(4px)} }
@@ -529,6 +529,8 @@
         .current-input { width:116px; min-height:52px; border:1px solid #d7d7dc; border-radius:15px; background:var(--soft); }
         .current-input:focus,.vb-input:focus,.vb-input-wide:focus { outline:0; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,122,255,.14); }
         .feedback { min-height:28px; margin-top:9px; }
+        .feedback[data-tone="retry"] {color:#844600;font-size:1rem;line-height:1.5;font-weight:600;white-space:pre-line}
+        .feedback[data-tone="corrected"] {color:#137047}
         .numpad { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; padding:0; border-radius:0; background:transparent; }
         .numpad button { width:100%; min-width:0; min-height:56px; padding:8px; border-radius:16px; background:var(--soft); box-shadow:none; font-size:1.15rem; color:var(--ink); }
         .numpad .del-btn { background:#fff0ee; color:var(--red); }
@@ -575,7 +577,7 @@
             .numpad { gap:7px; }
             .numpad button { min-height:50px; }
         }
-        @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition:none!important; scroll-behavior:auto!important; } }
+        @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition:none!important; scroll-behavior:auto!important; } .current-card.yiqi-answer-wrong input { animation-duration:300ms!important; } }
         @media (prefers-reduced-transparency:reduce) { .yiqi-cheer { background:white; backdrop-filter:none; } }
     </style>
 </head>
@@ -627,7 +629,7 @@
         <div id="currentQuestionNum" style="font-weight:bold;">第1题 / 共20题</div>
         <div class="daily-progress" aria-hidden="true"><span></span></div>
         <div id="currentQuestionDisplay" class="current-question"></div>
-        <div id="currentFeedback" class="feedback"></div>
+        <div id="currentFeedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
     <div class="numpad" id="numpad">
         <button data-digit="1">1</button><button data-digit="2">2</button><button data-digit="3">3</button><button class="del-btn" data-action="del" aria-label="删除">⌫</button>
@@ -641,7 +643,7 @@
         <h3>🏆 今日排行榜</h3>
         <div class="table-wrapper">
             <table id="rankTable">
-                <thead><tr><th>排名</th><th>班级</th><th>姓名</th><th>得分</th><th>用时(秒)</th></tr></thead>
+                <thead><tr><th>排名</th><th>班级</th><th>姓名</th><th>首次答对</th><th>用时(秒)</th></tr></thead>
                 <tbody id="rankBody"></tbody>
             </table>
         </div>
@@ -1215,7 +1217,7 @@
     let seconds = 0;
     let currentStudent = null, roundToken = null, quotaKey = null;
     let phase = 'checking', epoch = 0, identityCheck = 0, panelActive = true;
-    let startedAt = null, pending = null;
+    let startedAt = null, pending = null, advanceTimer = null;
     let correctCount = 0;
     let wrongQuestions = [];
     let yiqiAnswerStreak = 0;
@@ -1254,6 +1256,7 @@
         });
     }
     function clearRound() {
+        clearTimeout(advanceTimer);advanceTimer=null;
         ++epoch; ++identityCheck; stopTimer(); startedAt=null; pending=null;
         currentStudent=null;roundToken=null;quotaKey=null;challengeQuestions=[];wrongQuestions=[];
         el('dailyRoundUI').hidden=true;el('resetChallengeBtn').disabled=true;
@@ -1271,9 +1274,9 @@
         const version=identityCheck;
         showIdentity('正在确认答题身份…');
         try {
-            const data=await api();
+            const data=await api('?mode=correction');
             if(version!==identityCheck||!panelActive)return;
-            if(!data.student?.name||!data.student?.class||!data.attempt||!data.quotaKey||!Number.isInteger(data.seed))throw Error('Invalid round');
+            if(data.mode!=='correction'||!data.student?.name||!data.student?.class||!data.attempt||!data.quotaKey||!Number.isInteger(data.seed))throw Error('Invalid round');
             currentStudent=data.student;roundToken=data.attempt;quotaKey=data.quotaKey;
             phase='active';resetChallenge(data.seed);activeIdentity();
             el('dailyRoundUI').hidden=false;el('resetChallengeBtn').disabled=false;
@@ -1309,7 +1312,9 @@
         currentRandom = createSeededRandom(seed ?? Date.now());
         try {
             const { oral, vertical } = buildExerciseSet();
-            return [...oral, ...vertical.map(generateVerticalChallenge)].map(q => ({ ...q, userAnswer: '', correct: false, answered: false }));
+            return [...oral, ...vertical.map(generateVerticalChallenge)].map(q => ({
+                ...q, firstAnswer: null, finalAnswer: null, wrongTries: 0, needsEdit: false, answered: false
+            }));
         } finally { currentRandom = oldRand; }
     }
 
@@ -1417,38 +1422,94 @@
         if (!container) return; 
         if (wrongQuestions.length === 0) { container.style.display = 'none'; return; } 
         container.style.display = 'block'; 
-        let html = '<h4>📝 错题回顾</h4><ul>'; 
-        wrongQuestions.forEach((item, idx) => { html += `<li><strong>${idx+1}.</strong> ${item.text} &nbsp; 正确答案: ${item.answer}</li>`; }); 
+        let html = '<h4>📝 订正回顾</h4><ul>';
+        wrongQuestions.forEach((item, idx) => { html += `<li><strong>${idx+1}.</strong> ${item.text} &nbsp; 首次填 ${item.userAnswer}，已改为 ${item.answer}</li>`; });
         html += '</ul>'; 
         container.innerHTML = html; 
     }
 
     // ======================= 提交答案 =======================
+    function correctionHint(text, tries) {
+        if(tries===1)return '还差一点，改一改再提交。';
+        const match=/^(\d+|□) ([+×-]) (\d+|□) = (\d+|□)$/.exec(text.replace(/\(\s*\)/,'□'));
+        if(!match)return '看一看空格在哪儿，再把你想到的数填进去验一验。';
+        const [,left,op,right,result]=match;
+        if(op==='×'){
+            if(result!=='□'){
+                const known=left==='□'?right:left;
+                return tries===2?'想一想：'+known+'和几相乘，积是'+result+'？':
+                    '① 从0开始，每次加'+known+'，一直数到'+result+'。\n② 数一数加了几次，把次数填回空格。';
+            }
+            return tries===2?'想一句和'+left+'、'+right+'有关的乘法口诀。':
+                '① 从0开始，每次数'+right+'个，一共数'+left+'次。\n② 最后停在哪个数？';
+        }
+        if(result!=='□'){
+            const other=left==='□'?right:left;
+            const reverse=op==='+'?result+' − '+other:left==='□'?result+' + '+right:left+' − '+result;
+            const hint=op==='+'?'从总数里去掉已知的加数。':left==='□'?'把剩下的和减去的合起来。':'从原来的数里去掉剩下的数。';
+            return tries===2?hint:'① 先算 '+reverse+'。\n② 把算出的数放回空格，等号两边一样吗？';
+        }
+        const a=Number(left),b=Number(right),u=a%10,v=b%10;
+        if(op==='+'){
+            const carry=u+v>=10;
+            return tries===2?'先算个位：'+u+' + '+v+'。'+(carry?'满十要向十位进1。':'不满十，不用进位。'):
+                '① 算个位 '+u+' + '+v+'，写下个位数。\n② '+(carry?'两数的十位相加，再加进来的1。':'把两个十位上的数相加。')+
+                (a+b===100?'十位又满十，要向百位进1。':'');
+        }
+        if(u>=v)return tries===2?'看个位：'+u+'够减'+v+'，不用退位。':
+            '① 个位算 '+u+' − '+v+'。\n② 再算十位，把两位合起来。';
+        if(a===100)return tries===2?'100的个位和十位都是0，要从百位开始换。':
+            '① 把1个百换成10个十，再把1个十换成10个一。\n② 个位用10减'+v+'，十位用剩下的9个十来减。';
+        return tries===2?'个位的'+u+'不够减'+v+'，从十位换1个十。':
+            '① 个位现在算 '+(10+u)+' − '+v+'。\n② 十位先少1个十，再减去'+Math.floor(b/10)+'个十。';
+    }
+    function setFeedback(message,tone) {
+        const box=el('currentFeedback');box.textContent=message;box.dataset.tone=tone;
+    }
+    function finishQuestion(q) {
+        if(phase!=='active'||!panelActive||challengeQuestions[currentIndex]!==q||!q.answered)return;
+        if(currentIndex+1<totalQ){currentIndex++;renderCurrentQuestion();return;}
+        pending={attempt:roundToken,elapsedSeconds:Math.min(86400,seconds),answers:challengeQuestions.map(item=>({
+            text:item.text,userAnswer:item.firstAnswer,finalAnswer:item.finalAnswer
+        }))};
+        void saveResult();
+    }
     function submitAnswer() {
         if (phase!=='active'||!panelActive) return;
         const q = challengeQuestions[currentIndex];
-        if (q.answered) return;
-        let userVal = '';
-        if (q.type === 'vertical') {
-            const container = document.getElementById('currentQuestionDisplay');
-            const inputs = container.querySelectorAll('.vb-input, .vb-input-wide');
-            userVal = Array.from(inputs).map(i=>i.value).join('');
-            q.userAnswer = userVal;
-        } else {
-            const inlineInput = document.getElementById('inlineInput');
-            userVal = inlineInput ? inlineInput.value : q.userAnswer;
+        if (!q||q.answered||q.needsEdit) return;
+        const inputs=Array.from(el('currentQuestionDisplay').querySelectorAll('input'));
+        const parts=inputs.map(input=>input.value.trim());
+        const validPart=parts.length>1?/^\d$/:/^\d{1,3}$/;
+        const invalid=parts.findIndex(part=>!validPart.test(part));
+        const userVal=parts.join('');
+        if(invalid!==-1||!/^\d{1,3}$/.test(userVal)){
+            setFeedback(parts.length>1?'请把每一个数位填完整。':'请输入一个数再提交。','retry');
+            inputs[invalid]?.focus();return;
         }
-        userVal=String(userVal).trim();
-        if(!/^\d{1,3}$/.test(userVal)){el('currentFeedback').textContent='请输入一个数再提交。';return;}
         if(startedAt===null)startTimer();
         if(phase!=='active')return;
-        q.userAnswer=userVal;
+        const first=q.firstAnswer===null;
+        if(first)q.firstAnswer=userVal;
         const isCorrect = Number(userVal)===q.answer;
-        q.answered = true;
-        q.correct = isCorrect;
         const answerCard = document.querySelector('.current-card');
         if (answerCard) answerCard.classList.remove('yiqi-answer-correct', 'yiqi-answer-wrong');
-        if (isCorrect) {
+        if(!isCorrect) {
+            q.wrongTries++;q.needsEdit=true;yiqiAnswerStreak=0;
+            if(first){
+                wrongQuestions.push({text:q.text,answer:q.answer,userAnswer:userVal,questionType:q.type||''});
+                emitGame('answer:wrong',{question:currentIndex+1});emitGame('streak:changed',{count:0});
+                if(answerCard){void answerCard.offsetWidth;answerCard.classList.add('yiqi-answer-wrong');}
+                try {navigator.vibrate?.(45);} catch {}
+            }
+            setFeedback(correctionHint(q.text,q.wrongTries),'retry');
+            inputs[0].focus();inputs[0].select();
+            return;
+        }
+        q.finalAnswer=userVal;q.answered=true;
+        inputs.forEach(input=>{input.readOnly=true;});
+        if(currentIndex+1===totalQ)stopTimer();
+        if(first){
             correctCount++;
             yiqiAnswerStreak++;
             if (answerCard) {
@@ -1465,18 +1526,13 @@
             }
             triggerAnswerCelebration(yiqiAnswerStreak);
             emitGame('answer:correct',{question:currentIndex+1});emitGame('streak:changed',{count:yiqiAnswerStreak});
-        }
-        else {
-            yiqiAnswerStreak = 0;
-            if (answerCard) { void answerCard.offsetWidth; answerCard.classList.add('yiqi-answer-wrong'); }
-            emitGame('answer:wrong',{question:currentIndex+1});emitGame('streak:changed',{count:0});
-            wrongQuestions.push({ text: q.text || q.displayHtml, answer: q.answer, userAnswer: userVal, questionType: q.type || '' });
+        }else{
+            setFeedback('改对了！','corrected');yiqiPlayTone(false);
         }
         emitGame('progress:changed',{completed:currentIndex+1,total:totalQ,correct:correctCount});
-        if(currentIndex+1<totalQ){currentIndex++;renderCurrentQuestion();return;}
-        stopTimer();
-        pending={attempt:roundToken,elapsedSeconds:Math.min(86400,seconds),answers:challengeQuestions.map(q=>({text:q.text,userAnswer:q.userAnswer}))};
-        void saveResult();
+        if(first){finishQuestion(q);return;}
+        const round=epoch;
+        advanceTimer=setTimeout(()=>{advanceTimer=null;if(round===epoch)finishQuestion(q);},650);
     }
 
     function showResultStatus(message, action='', callback=null) {
@@ -1494,9 +1550,9 @@
         try{
             const result=await api('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(receipt)});
             if(round!==epoch)return;
-            if(result.saved!==true||!Number.isInteger(result.score)||!Number.isInteger(result.time))throw Error('Missing receipt');
+            if(result.saved!==true||!Number.isInteger(result.score)||result.score<0||result.score>totalQ||!Number.isInteger(result.time))throw Error('Missing receipt');
             pending=null;phase='done';displayWrongQuestions();
-            showResultStatus('✓ 成绩已记录：答对 '+result.score+' / '+totalQ+' 题，用时 '+result.time+' 秒。','再练一次',beginRound);
+            showResultStatus('✓ 成绩已记录：首次答对 '+result.score+' 题，订正答对 '+(totalQ-result.score)+' 题。共 '+totalQ+' 题，用时 '+result.time+' 秒。','再练一次',beginRound);
             emitGame('score-submitted',{gameId:catalogId});
             if(wrongQuestions.length)emitGame('mistakes-recorded',{count:wrongQuestions.length});
             triggerConfetti();void loadLeaderboard();
@@ -1527,7 +1583,7 @@
         if (questionDisplayDiv) questionDisplayDiv.style.display = 'block';
         if (feedbackDiv) feedbackDiv.style.display = 'block';
         if (dailyProgress) dailyProgress.style.display = 'block';
-        if (feedbackDiv) feedbackDiv.innerHTML = '';
+        if (feedbackDiv) {feedbackDiv.textContent='';delete feedbackDiv.dataset.tone;}
         const currentCard = document.querySelector('.current-card');
         if (currentCard) {
             currentCard.classList.remove('yiqi-answer-correct', 'yiqi-answer-wrong');
@@ -1539,22 +1595,9 @@
         document.getElementById('currentQuestionNum').innerText = `第${currentIndex+1}题 / 共${totalQ}题`;
         if (q.type === 'vertical') {
             questionDisplayDiv.innerHTML = q.displayHtml;
-            const inputs = questionDisplayDiv.querySelectorAll('.vb-input, .vb-input-wide');
-            inputs.forEach(inp => {
-                inp.value = '';
-                inp.addEventListener('input', (e) => {
-                    const allInputs = questionDisplayDiv.querySelectorAll('.vb-input, .vb-input-wide');
-                    q.userAnswer = Array.from(allInputs).map(i=>i.value).join('');
-                });
-            });
         } else {
             let textWithInput = q.text.replace(/\([^)]*\)/, '<input type="text" inputmode="numeric" maxlength="3" aria-label="答案" class="current-input" id="inlineInput" style="width:100px; margin:0 8px;" placeholder="?" autocomplete="off">');
             questionDisplayDiv.innerHTML = textWithInput;
-            const inlineInput = document.getElementById('inlineInput');
-            if (inlineInput) {
-                inlineInput.value = q.userAnswer || '';
-                inlineInput.addEventListener('input', (e) => { q.userAnswer = e.target.value; });
-            }
         }
     }
 
@@ -1586,7 +1629,7 @@
         if (q && q.type === 'vertical') { 
             const container = document.getElementById('currentQuestionDisplay'); 
             const focused = container.querySelector('.vb-input:focus, .vb-input-wide:focus'); 
-            activeInputElement = focused || null; 
+            activeInputElement = focused || (container.contains(activeInputElement)?activeInputElement:null);
         } else { 
             activeInputElement = document.getElementById('inlineInput'); 
         } 
@@ -1594,13 +1637,15 @@
     function setupNumpad() { 
         const numpad = document.getElementById('numpad'); 
         if (!numpad) return; 
+        // Keep the text selection intact when a student taps the on-screen keypad.
+        numpad.addEventListener('pointerdown', e=>{if(e.target.closest('button'))e.preventDefault();});
         document.addEventListener('focusin', (e) => { 
             if (e.target.classList && (e.target.classList.contains('vb-input') || e.target.classList.contains('vb-input-wide'))) activeInputElement = e.target; 
             else if (e.target.id === 'inlineInput') activeInputElement = e.target; 
         }); 
         numpad.addEventListener('click', (e) => { 
             const btn = e.target.closest('button'); 
-            if (!btn || phase!=='active') return;
+            if (!btn || phase!=='active'||challengeQuestions[currentIndex]?.answered) return;
             const digit = btn.getAttribute('data-digit'); 
             const action = btn.getAttribute('data-action'); 
             setActiveInput(); 
@@ -1610,13 +1655,15 @@
                 else activeInputElement = document.getElementById('inlineInput'); 
                 if (!activeInputElement) return; 
             } 
-            if (digit !== null) { 
-                if(activeInputElement.value.length>=3)return;
-                activeInputElement.value += digit; 
-                activeInputElement.dispatchEvent(new Event('input', { bubbles: true })); 
-            } else if (action === 'del') { 
-                activeInputElement.value = activeInputElement.value.slice(0, -1); 
-                activeInputElement.dispatchEvent(new Event('input')); 
+            if (digit!==null||action==='del') {
+                const input=activeInputElement;
+                let start=input.selectionStart??input.value.length;
+                const end=input.selectionEnd??start;
+                const replacement=digit??'';
+                if(action==='del'&&start===end)start=Math.max(0,start-1);
+                if(input.value.length-(end-start)+replacement.length>(input.maxLength>0?input.maxLength:3))return;
+                input.setRangeText(replacement,start,end,'end');
+                input.dispatchEvent(new Event('input',{bubbles:true}));
             } else if (action === 'submit') { 
                 submitAnswer(); 
             } 
@@ -1640,7 +1687,11 @@
     });
     el('resetChallengeBtn').addEventListener('click',()=>{if(canLeaveRound())void beginRound();});
     el('currentQuestionDisplay').addEventListener('input',event=>{
-        if(panelActive&&phase==='active'&&/\d/.test(event.target.value))startTimer();
+        const q=challengeQuestions[currentIndex];
+        if(panelActive&&phase==='active'&&q&&!q.answered){
+            q.needsEdit=false;
+            if(/\d/.test(event.target.value))startTimer();
+        }
     });
     el('currentQuestionDisplay').addEventListener('keydown',event=>{
         if(event.key==='Enter'&&!event.repeat){event.preventDefault();submitAnswer();}
